@@ -1,6 +1,7 @@
 #include <math.h>
 #include <splexer.h>
 #include <sptl.h>
+#include <errno.h>
 
 #define TODO_LINE 1337
 
@@ -57,8 +58,8 @@ static inline enum Schwasm_Value_Type schwasm_expect_value(struct Schwasm *schwa
             return SCHWASM_VALUE_ERROR;
         }
 
-        if (token->type != TOK_IntLiteral) {
-            sp_log(SP_ERROR, "Line %d: Unexpected hex value", TODO_LINE);
+        if (token->type != TOK_IntLiteral && token->type != TOK_ID) {
+            sp_log(SP_ERROR, "Line %d: Unexpected token after $", TODO_LINE);
             return SCHWASM_VALUE_ERROR;
         }
 
@@ -71,17 +72,45 @@ static inline enum Schwasm_Value_Type schwasm_expect_value(struct Schwasm *schwa
     }
 }
 
-int ldaa_imm(struct Schwasm *schwasm) {
-    sp_sb_appendf(&generated, "\t%04X : 02;\n", schwasm->addr++);
+enum GCPU_REG {
+    GCPU_REGA,
+    GCPU_REGB,
+    GCPU_REGX,
+    GCPU_REGY
+};
+
+int ld_imm(struct Schwasm *schwasm, enum GCPU_REG reg) {
+        switch (reg) {
+            case GCPU_REGA:
+                sp_sb_appendf(&generated, "\t%04X : 02;\n", schwasm->addr++);
+                break;
+            case GCPU_REGB:
+                sp_sb_appendf(&generated, "\t%04X : 03;\n", schwasm->addr++);
+                break;
+            case GCPU_REGX:
+                sp_sb_appendf(&generated, "\t%04X : 08;\n", schwasm->addr++);
+                break;
+            case GCPU_REGY:
+                sp_sb_appendf(&generated, "\t%04X : 09;\n", schwasm->addr++);
+                break;
+        }
 
     switch (schwasm_expect_value(schwasm)) {
         case SCHWASM_VALUE_HEX:
             if (schwasm_get_token(schwasm)->sb.count > 2) {
-                sp_log(SP_ERROR, "Line %d: Register does not support lodaing %d-bit integers", TODO_LINE, (int) powl(2, schwasm_get_token(schwasm)->sb.count));
+                sp_log(SP_ERROR, "Line %d: Register does not support loading %d-bit integers", TODO_LINE, (int) powl(2, schwasm_get_token(schwasm)->sb.count));
                 return 1;
             }
 
-            sp_sb_appendf(&generated, "\t%04X : %02X;\n", schwasm->addr++, (int) strtol(schwasm_get_token(schwasm)->sb.data, NULL, 16));
+            errno = 0;
+            int value = (int) strtol(schwasm_get_token(schwasm)->sb.data, NULL, 16);
+
+            if (errno != 0) {
+                sp_log(SP_ERROR, "Line %d: Error parsing hexadecimal value", TODO_LINE);
+                return 1;
+            }
+
+            sp_sb_appendf(&generated, "\t%04X : %02X;\n", schwasm->addr++, value);
             break;
         case SCHWASM_VALUE_DECIMAL:
             sp_sb_appendf(&generated, "\t%04X : %02X;\n", schwasm->addr++, (int) schwasm_get_token(schwasm)->int_lit.value);
@@ -93,12 +122,12 @@ int ldaa_imm(struct Schwasm *schwasm) {
     return 0;
 }
 
-int ldaa_reg(struct Schwasm *schwasm) {
+int ld_reg(struct Schwasm *schwasm) {
     (void) schwasm;
     return 1;
 }
 
-int ldaa(struct Schwasm *schwasm) {
+int ld(struct Schwasm *schwasm, enum GCPU_REG reg) {
     const Sp_Lexer_Token *token = schwasm_next_token(schwasm);
 
     if (!token) {
@@ -107,9 +136,9 @@ int ldaa(struct Schwasm *schwasm) {
     }
 
     if (token->type == TOK_Pound) {
-        return ldaa_imm(schwasm);
+        return ld_imm(schwasm, reg);
     } else {
-        return ldaa_reg(schwasm);
+        return ld_reg(schwasm);
     }
 }
 
@@ -177,8 +206,13 @@ int main(int argc, char **argv) {
         } else if (strcmp("TBA", token->sb.data) == 0) {
             sp_sb_appendf(&generated, "%04X : 01", schwasm.addr++);
         } else if (strcmp("LDAA", token->sb.data) == 0) {
-            if (ldaa(&schwasm) != 0) {
+            if (ld(&schwasm, GCPU_REGA) != 0) {
                 sp_log(SP_ERROR, "Line %d: Failed to parse LDAA", TODO_LINE);
+                return 1;
+            }
+        } else if (strcmp("LDAB", token->sb.data) == 0) {
+            if (ld(&schwasm, GCPU_REGB) != 0) {
+                sp_log(SP_ERROR, "Line %d: Failed to parse LDAB", TODO_LINE);
                 return 1;
             }
         } else if (strcmp("ORG", token->sb.data) == 0) {

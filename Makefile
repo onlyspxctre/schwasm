@@ -6,7 +6,7 @@ export OBJDIR := $(abspath ./obj)
 export INCLUDEDIR := $(abspath ./include)
 export LIBDIR := $(abspath ./lib)
 
-export SPLEXER_VERSION := 05295e8
+export SPLEXER_VERSION := 7e5b9f8
 
 WINDOWS ?= n
 ifneq ($(WINDOWS),n)
