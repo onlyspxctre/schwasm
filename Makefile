@@ -2,11 +2,13 @@
 
 
 export BUILDDIR := $(abspath ./build)
-export OBJDIR := $(abspath ./obj)
+export DEPSDIR := $(abspath ./deps)
 export INCLUDEDIR := $(abspath ./include)
 export LIBDIR := $(abspath ./lib)
 
-export SPLEXER_VERSION := 7e5b9f8
+export SPLEXER_VERSION := 139fe05
+
+RELEASE ?= n
 
 WINDOWS ?= n
 ifneq ($(WINDOWS),n)
@@ -28,35 +30,47 @@ $(LIBDIR)/libsplexer.dll: $(BUILDDIR)/splexer
 else
 export CC := clang
 export CFLAGS := -Wall -Wextra -std=c11 -fcolor-diagnostics -I$(INCLUDEDIR)
-export LIBS := -l:libsplexer.so -lm
+export LIBS := -lsplexer -lm
+
+ifneq ($(RELEASE),n)
+CFLAGS += -O2 -static
+BUILDDIR := $(abspath ./build/release)
+else
+CFLAGS += -g
+endif
 
 all: $(BUILDDIR)/schwasm
 
-$(BUILDDIR)/schwasm: schwasm.c $(LIBDIR)/libsplexer.so $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
+$(BUILDDIR)/schwasm: schwasm.c $(LIBDIR)/libsplexer.so $(LIBDIR)/libsplexer.a $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
 	mkdir -p $(BUILDDIR)
-	$(CC) $(CFLAGS) -ggdb -o $@ $< -L$(LIBDIR) $(LIBS)
+	$(CC) $(CFLAGS) -o $@ $< -L$(LIBDIR) $(LIBS)
 
-$(LIBDIR)/libsplexer.so: $(BUILDDIR)/splexer
+$(LIBDIR)/libsplexer.a: $(DEPSDIR)/splexer
 	mkdir -p $(LIBDIR)
-	$(MAKE) -C $(BUILDDIR)/splexer
-	cp -f $(BUILDDIR)/splexer/build/libsplexer.so $@
+	$(MAKE) -C $(DEPSDIR)/splexer all
+	cp -f $(DEPSDIR)/splexer/build/libsplexer.a $@
+
+$(LIBDIR)/libsplexer.so: $(DEPSDIR)/splexer
+	mkdir -p $(LIBDIR)
+	$(MAKE) -C $(DEPSDIR)/splexer all
+	cp -f $(DEPSDIR)/splexer/build/libsplexer.so $@
 endif
 
 $(INCLUDEDIR)/sptl.h:
 	mkdir -p $(INCLUDEDIR)
 	cd $(INCLUDEDIR) && curl -O https://raw.githubusercontent.com/onlyspxctre/sptl.h/refs/heads/master/sptl.h
 
-$(INCLUDEDIR)/splexer.h: $(BUILDDIR)/splexer
+$(INCLUDEDIR)/splexer.h: $(DEPSDIR)/splexer
 	mkdir -p $(INCLUDEDIR)
-	cp -f $(BUILDDIR)/splexer/splexer.h $@
+	cp -f $(DEPSDIR)/splexer/splexer.h $@
 
-$(BUILDDIR)/splexer:
-	mkdir -p $(BUILDDIR)
-	git clone https://github.com/onlyspxctre/splexer.git $(BUILDDIR)/splexer
-	cd $(BUILDDIR)/splexer && git checkout $(SPLEXER_VERSION)
+$(DEPSDIR)/splexer:
+	mkdir -p $(DEPSDIR)
+	git clone https://github.com/onlyspxctre/splexer.git $(DEPSDIR)/splexer
+	cd $(DEPSDIR)/splexer && git checkout $(SPLEXER_VERSION)
 
 clean:
 	rm -rf $(BUILDDIR)
-	rm -rf $(OBJDIR)
+	rm -rf $(DEPSDIR)
 	rm -rf $(INCLUDEDIR)
 	rm -rf $(LIBDIR)
