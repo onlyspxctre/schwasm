@@ -1,6 +1,6 @@
+#include <math.h>
 #include <splexer.h>
 #include <sptl.h>
-#include <math.h>
 
 #define TODO_LINE 1337
 
@@ -31,32 +31,63 @@ static inline const Sp_Lexer_Token *schwasm_next_token(struct Schwasm *schwasm) 
     return schwasm_get_token(schwasm);
 }
 
-int ldaa_imm(struct Schwasm *schwasm) {
+enum Schwasm_Value_Type {
+    SCHWASM_VALUE_ERROR,
+    SCHWASM_VALUE_HEX,
+    SCHWASM_VALUE_DECIMAL,
+};
+static inline enum Schwasm_Value_Type schwasm_expect_value(struct Schwasm *schwasm) {
     const Sp_Lexer_Token *token = schwasm_next_token(schwasm);
 
-    if (!token) {
-        sp_log(SP_ERROR, "Line %d: No immediate value after #", TODO_LINE);
-        return 1;
+    if (!token || token->type == TOK_Newline) {
+        sp_log(SP_ERROR, "Line %d: Expected value", TODO_LINE);
+        return SCHWASM_VALUE_ERROR;
     }
 
     if (strcmp("$", token->sb.data) == 0) {
         token = schwasm_next_token(schwasm);
 
         if (!token) {
-            sp_log(SP_ERROR, "Line %d: No hexadecimal value after $", TODO_LINE);
-            return 1;
+            sp_log(SP_ERROR, "Line %d: Unexpected EOF", TODO_LINE);
+            return SCHWASM_VALUE_ERROR;
         }
 
-        if (token->sb.count > 2) {
-            sp_log(SP_ERROR, "Line %d: GCPU does not support loading %d-bit integers", TODO_LINE, (int) powl(2, token->sb.count));
-            return 1;
+        if (token->type == TOK_Newline) {
+            sp_log(SP_ERROR, "Line %d: Expected hexadecimal value after $", TODO_LINE);
+            return SCHWASM_VALUE_ERROR;
         }
 
-        sp_sb_appendf(&generated, "\t%04X : %02X;\n", schwasm->addr, (int) strtol(token->sb.data, NULL, 16));
+        if (token->type != TOK_IntLiteral) {
+            sp_log(SP_ERROR, "Line %d: Unexpected hex value", TODO_LINE);
+            return SCHWASM_VALUE_ERROR;
+        }
+
+        return SCHWASM_VALUE_HEX;
     } else if (token->type == TOK_IntLiteral) {
-        sp_sb_appendf(&generated, "\t%04X : %02X;\n", schwasm->addr, (int) token->int_lit.value);
+        return SCHWASM_VALUE_DECIMAL;
     } else {
-        return 1;
+        sp_log(SP_ERROR, "Line %d: Unexpected value", TODO_LINE);
+        return SCHWASM_VALUE_ERROR;
+    }
+}
+
+int ldaa_imm(struct Schwasm *schwasm) {
+    sp_sb_appendf(&generated, "\t%04X : 02;\n", schwasm->addr++);
+
+    switch (schwasm_expect_value(schwasm)) {
+        case SCHWASM_VALUE_HEX:
+            if (schwasm_get_token(schwasm)->sb.count > 2) {
+                sp_log(SP_ERROR, "Line %d: Register does not support lodaing %d-bit integers", TODO_LINE, (int) powl(2, schwasm_get_token(schwasm)->sb.count));
+                return 1;
+            }
+
+            sp_sb_appendf(&generated, "\t%04X : %02X;\n", schwasm->addr++, (int) strtol(schwasm_get_token(schwasm)->sb.data, NULL, 16));
+            break;
+        case SCHWASM_VALUE_DECIMAL:
+            sp_sb_appendf(&generated, "\t%04X : %02X;\n", schwasm->addr++, (int) schwasm_get_token(schwasm)->int_lit.value);
+            break;
+        case SCHWASM_VALUE_ERROR:
+            return 1;
     }
 
     return 0;
@@ -140,7 +171,12 @@ int main(int argc, char **argv) {
 
         schwasm.lexer_attr.busy = true;
 
-        if (strcmp("LDAA", token->sb.data) == 0) {
+        if (strcmp("ORG", token->sb.data) == 0) {
+        } else if (strcmp("TAB", token->sb.data) == 0) {
+            sp_sb_appendf(&generated, "%04X : 00", schwasm.addr++);
+        } else if (strcmp("TBA", token->sb.data) == 0) {
+            sp_sb_appendf(&generated, "%04X : 01", schwasm.addr++);
+        } else if (strcmp("LDAA", token->sb.data) == 0) {
             if (ldaa(&schwasm) != 0) {
                 sp_log(SP_ERROR, "Line %d: Failed to parse LDAA", TODO_LINE);
                 return 1;
