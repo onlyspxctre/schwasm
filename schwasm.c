@@ -215,7 +215,6 @@ int main(int argc, char **argv) {
                 sp_log(SP_ERROR, "Line %d: Failed to parse LDAB", TODO_LINE);
                 return 1;
             }
-        } else if (strcmp("ORG", token->sb.data) == 0) {
         } else {
             sp_log(SP_ERROR, "Line %d: Failed to parse unknown instruction \"%s\"", TODO_LINE, token->sb.data);
             return 1;
