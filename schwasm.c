@@ -63,6 +63,7 @@ int ldaa_imm(struct Schwasm *schwasm) {
 }
 
 int ldaa_reg(struct Schwasm *schwasm) {
+    (void) schwasm;
     return 1;
 }
 

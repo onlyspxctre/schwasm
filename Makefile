@@ -1,15 +1,34 @@
 .PHONY: all clean
 
+
 export BUILDDIR := $(abspath ./build)
 export OBJDIR := $(abspath ./obj)
 export INCLUDEDIR := $(abspath ./include)
 export LIBDIR := $(abspath ./lib)
 
+export SPLEXER_VERSION := 05295e8
+
+WINDOWS ?= n
+ifneq ($(WINDOWS),n)
+export CC := x86_64-w64-mingw32-gcc
+export CFLAGS := -Wall -Wextra -std=c11 -I$(INCLUDEDIR)
+export LIBS := -l:libsplexer.dll -lm
+
+all: $(BUILDDIR)/schwasm.exe
+
+$(BUILDDIR)/schwasm.exe: schwasm.c $(LIBDIR)/libsplexer.dll $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
+	mkdir -p $(BUILDDIR)
+	$(CC) $(CFLAGS) -ggdb -o $@ $< -L$(LIBDIR) $(LIBS)
+
+$(LIBDIR)/libsplexer.dll: $(BUILDDIR)/splexer
+	mkdir -p $(LIBDIR)
+	$(MAKE) -C $(BUILDDIR)/splexer WINDOWS=y main.exe
+	cp -f $(BUILDDIR)/splexer/build/libsplexer.dll $@
+
+else
 export CC := clang
 export CFLAGS := -Wall -Wextra -std=c11 -fcolor-diagnostics -I$(INCLUDEDIR)
 export LIBS := -l:libsplexer.so -lm
-
-export SPLEXER_VERSION := 04d081e
 
 all: $(BUILDDIR)/schwasm
 
@@ -21,6 +40,7 @@ $(LIBDIR)/libsplexer.so: $(BUILDDIR)/splexer
 	mkdir -p $(LIBDIR)
 	$(MAKE) -C $(BUILDDIR)/splexer
 	cp -f $(BUILDDIR)/splexer/build/libsplexer.so $@
+endif
 
 $(INCLUDEDIR)/sptl.h:
 	mkdir -p $(INCLUDEDIR)
