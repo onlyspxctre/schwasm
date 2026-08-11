@@ -72,7 +72,8 @@ static inline enum Schwasm_Value_Type schwasm_expect_value(struct Schwasm *schwa
     Sp_Lexer_Token_Line prev_line = splexer_token_get_line(&schwasm->lexer, prev);
     Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
     if (!token || prev_line.line != token_line.line) {
-        sp_die(1, SCHWASM_FILE_FMT " Expected value\n", schwasm_file_arg(schwasm->filename, token_line));
+        prev_line.col += prev->sv.count - 1; // points col to the end of the previous token
+        sp_die(1, SCHWASM_FILE_FMT " Expected value\n", schwasm_file_arg(schwasm->filename, prev_line));
     }
 
     if (sp_sv_eq(&sp_cstr_slice("$"), &token->sv)) {
