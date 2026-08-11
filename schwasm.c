@@ -1,7 +1,7 @@
+#include <errno.h>
 #include <math.h>
 #include <splexer.h>
 #include <sptl.h>
-#include <errno.h>
 
 #define TODO_LINE 1337
 
@@ -39,7 +39,7 @@ static inline void schwasm_create_node(struct Schwasm *schwasm, uint8_t code) {
     if (sp_bitset_check(&schwasm->used_addrs, schwasm->addr)) {
         sp_die(1, "Line %d: Address collision", TODO_LINE);
     }
-    sp_heap_push(&schwasm->nodes, ((struct Schwasm_Node) { .addr = schwasm->addr, .code = code }));
+    sp_heap_push(&schwasm->nodes, ((struct Schwasm_Node) {.addr = schwasm->addr, .code = code}));
     sp_bitset_set(&schwasm->used_addrs, schwasm->addr);
     ++schwasm->addr;
 }
@@ -49,7 +49,7 @@ static inline const Sp_Lexer_Token *schwasm_get_token(struct Schwasm *schwasm) {
         return NULL;
     }
 
-    sp_log(SP_INFO, "%s", schwasm->lexer.tokens.data[schwasm->lexer_attr.idx].sb.data);
+    sp_log(SP_INFO, SP_SV_FMT, sp_sv_arg(schwasm->lexer.tokens.data[schwasm->lexer_attr.idx].sv));
 
     return &schwasm->lexer.tokens.data[schwasm->lexer_attr.idx];
 }
@@ -64,20 +64,23 @@ enum Schwasm_Value_Type {
     SCHWASM_VALUE_DECIMAL,
 };
 static inline enum Schwasm_Value_Type schwasm_expect_value(struct Schwasm *schwasm) {
+    const Sp_Lexer_Token *prev = schwasm_get_token(schwasm);
     const Sp_Lexer_Token *token = schwasm_next_token(schwasm);
 
-    if (!token || token->type == TOK_Newline) {
+    if (!token ||
+        splexer_token_get_line(&schwasm->lexer, prev).line != splexer_token_get_line(&schwasm->lexer, token).line) {
         sp_die(1, "Line %d: Expected value", TODO_LINE);
     }
 
-    if (strcmp("$", token->sb.data) == 0) {
+    if (sp_sv_eq(&sp_cstr_slice("$"), &token->sv)) {
+        prev = schwasm_get_token(schwasm);
         token = schwasm_next_token(schwasm);
 
         if (!token) {
             sp_die(1, "Line %d: Unexpected EOF", TODO_LINE);
         }
 
-        if (token->type == TOK_Newline) {
+        if (splexer_token_get_line(&schwasm->lexer, prev).line != splexer_token_get_line(&schwasm->lexer, token).line) {
             sp_die(1, "Line %d: Expected hexadecimal value after $", TODO_LINE);
         }
 
@@ -108,29 +111,29 @@ enum GCPU_REG {
 };
 
 void ld_imm(struct Schwasm *schwasm, enum GCPU_REG reg) {
-        switch (reg) {
-            case GCPU_REGA:
-                schwasm_create_node(schwasm, 0x02);
-                break;
-            case GCPU_REGB:
-                schwasm_create_node(schwasm, 0x03);
-                break;
-            case GCPU_REGX:
-                schwasm_create_node(schwasm, 0x08);
-                break;
-            case GCPU_REGY:
-                schwasm_create_node(schwasm, 0x09);
-                break;
-        }
+    switch (reg) {
+        case GCPU_REGA:
+            schwasm_create_node(schwasm, 0x02);
+            break;
+        case GCPU_REGB:
+            schwasm_create_node(schwasm, 0x03);
+            break;
+        case GCPU_REGX:
+            schwasm_create_node(schwasm, 0x08);
+            break;
+        case GCPU_REGY:
+            schwasm_create_node(schwasm, 0x09);
+            break;
+    }
 
     switch (schwasm_expect_value(schwasm)) {
         case SCHWASM_VALUE_HEX:
-            if (schwasm_get_token(schwasm)->sb.count > 2) {
-                sp_die(1, "Line %d: Register does not support loading %d-bit integers", TODO_LINE, (int) powl(2, schwasm_get_token(schwasm)->sb.count));
+            if (schwasm_get_token(schwasm)->sv.count > 2) {
+                sp_die(1, "Line %d: Register does not support loading %d-bit integers", TODO_LINE, (int) powl(2, schwasm_get_token(schwasm)->sv.count));
             }
 
             errno = 0;
-            int value = (int) strtol(schwasm_get_token(schwasm)->sb.data, NULL, 16);
+            int value = (int) strtol(schwasm_get_token(schwasm)->sv.ptr, NULL, 16);
 
             if (errno != 0) {
                 sp_die(1, "Line %d: Error parsing hexadecimal value", TODO_LINE);
@@ -198,6 +201,7 @@ int main(int argc, char **argv) {
 
     sp_sb_appendf(&generated, "CONTENT\nBEGIN\n");
 
+    const Sp_Lexer_Token *prev = NULL;
     const Sp_Lexer_Token *token = schwasm_get_token(&schwasm);
 
     if (!token) {
@@ -205,12 +209,9 @@ int main(int argc, char **argv) {
     }
 
     do {
-        if (token->type == TOK_Newline) {
+        if (prev && splexer_token_get_line(&schwasm.lexer, prev).line != splexer_token_get_line(&schwasm.lexer, token).line) {
             schwasm.lexer_attr.busy = false;
-            continue;
-        }
-
-        if (schwasm.lexer_attr.busy) { // some token after a completed instruction
+        } else if (schwasm.lexer_attr.busy) { // some token after a completed instruction
             sp_die(1, "Line %d: Trailing tokens after instruction", TODO_LINE);
         }
 
@@ -223,18 +224,20 @@ int main(int argc, char **argv) {
 
         schwasm.lexer_attr.busy = true;
 
-        if (strcmp("ORG", token->sb.data) == 0) {
-        } else if (strcmp("TAB", token->sb.data) == 0) {
+        if (sp_sv_eq(&sp_cstr_slice("ORG"), &token->sv)) {
+        } else if (sp_sv_eq(&sp_cstr_slice("TAB"), &token->sv)) {
             schwasm_create_node(&schwasm, 0x00);
-        } else if (strcmp("TBA", token->sb.data) == 0) {
+        } else if (sp_sv_eq(&sp_cstr_slice("TBA"), &token->sv)) {
             schwasm_create_node(&schwasm, 0x01);
-        } else if (strcmp("LDAA", token->sb.data) == 0) {
+        } else if (sp_sv_eq(&sp_cstr_slice("LDAA"), &token->sv)) {
             ld(&schwasm, GCPU_REGA);
-        } else if (strcmp("LDAB", token->sb.data) == 0) {
+        } else if (sp_sv_eq(&sp_cstr_slice("LDAB"), &token->sv)) {
             ld(&schwasm, GCPU_REGB);
         } else {
-            sp_die(1, "Line %d: Failed to parse unknown instruction \"%s\"", TODO_LINE, token->sb.data);
+            sp_die(1, "Line %d: Failed to parse unknown instruction \"" SP_SV_FMT "\"", TODO_LINE, sp_sv_arg(token->sv));
         }
+
+        prev = schwasm_get_token(&schwasm);
     } while ((token = schwasm_next_token(&schwasm)));
 
     while (schwasm.nodes.count > 0) {
