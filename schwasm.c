@@ -117,6 +117,31 @@ enum GCPU_REG {
     GCPU_REGY,
 };
 
+void org(struct Schwasm *schwasm) {
+    int value;
+    switch (schwasm_expect_value(schwasm)) {
+        case SCHWASM_VALUE_HEX:
+            value = (int) strtol(schwasm_get_token(schwasm)->sv.ptr, NULL, 16);
+
+            if (schwasm_get_token(schwasm)->sv.count > 4) { // exceeds 4 hex digits
+                Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
+                sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%X) \n", schwasm_file_arg(schwasm->filename, token_line), value);
+            }
+
+            schwasm->addr = (uint16_t) value;
+            break;
+        case SCHWASM_VALUE_DECIMAL:
+            value = (int) schwasm_get_token(schwasm)->int_lit.value;
+            if (value > UINT16_MAX) {
+                Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
+                sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (%d) \n", schwasm_file_arg(schwasm->filename, token_line), value);
+            }
+
+            schwasm->addr = (uint16_t) value;
+            break;
+    }
+}
+
 void ld_imm(struct Schwasm *schwasm, enum GCPU_REG reg) {
     switch (reg) {
         case GCPU_REGA:
@@ -239,6 +264,7 @@ int main(int argc, char **argv) {
         schwasm.lexer_attr.busy = true;
 
         if (sp_sv_eq(&sp_cstr_slice("ORG"), &token->sv)) {
+            org(&schwasm);
         } else if (sp_sv_eq(&sp_cstr_slice("TAB"), &token->sv)) {
             schwasm_create_node(&schwasm, 0x00);
         } else if (sp_sv_eq(&sp_cstr_slice("TBA"), &token->sv)) {
