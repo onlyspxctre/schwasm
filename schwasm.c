@@ -3,7 +3,8 @@
 #include <splexer.h>
 #include <sptl.h>
 
-#define TODO_LINE 1337
+#define SCHWASM_FILE_FMT "%s:%ld:%ld:"
+    #define schwasm_file_arg(name, tok_line) name, tok_line.line, tok_line.col
 
 struct Schwasm_Node {
     uint16_t addr;
@@ -23,21 +24,25 @@ struct Schwasm {
         bool busy;
     } lexer_attr;
     uint16_t addr; // GCPU uses a 4K ROM, only requires 12-bit wide address; 16-bits is more than enough
+    const char *filename;
 };
 
-static inline struct Schwasm schwasm_init() {
+static inline struct Schwasm schwasm_init(const char *filename) {
     struct Schwasm schwasm = {
         .nodes = {
             .cmp = &schwasm_node_lesser_cmp,
         },
+        .filename = filename,
     };
 
     return schwasm;
 }
+static inline const Sp_Lexer_Token *schwasm_get_token(struct Schwasm *schwasm);
 
 static inline void schwasm_create_node(struct Schwasm *schwasm, uint8_t code) {
     if (sp_bitset_check(&schwasm->used_addrs, schwasm->addr)) {
-        sp_die(1, "Line %d: Address collision", TODO_LINE);
+        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
+        sp_die(1, SCHWASM_FILE_FMT " Address collision\n", schwasm_file_arg(schwasm->filename, token_line));
     }
     sp_heap_push(&schwasm->nodes, ((struct Schwasm_Node) {.addr = schwasm->addr, .code = code}));
     sp_bitset_set(&schwasm->used_addrs, schwasm->addr);
@@ -48,9 +53,6 @@ static inline const Sp_Lexer_Token *schwasm_get_token(struct Schwasm *schwasm) {
     if (schwasm->lexer_attr.idx >= schwasm->lexer.tokens.count) {
         return NULL;
     }
-
-    sp_log(SP_INFO, SP_SV_FMT, sp_sv_arg(schwasm->lexer.tokens.data[schwasm->lexer_attr.idx].sv));
-
     return &schwasm->lexer.tokens.data[schwasm->lexer_attr.idx];
 }
 
@@ -67,32 +69,36 @@ static inline enum Schwasm_Value_Type schwasm_expect_value(struct Schwasm *schwa
     const Sp_Lexer_Token *prev = schwasm_get_token(schwasm);
     const Sp_Lexer_Token *token = schwasm_next_token(schwasm);
 
-    if (!token ||
-        splexer_token_get_line(&schwasm->lexer, prev).line != splexer_token_get_line(&schwasm->lexer, token).line) {
-        sp_die(1, "Line %d: Expected value", TODO_LINE);
+    Sp_Lexer_Token_Line prev_line = splexer_token_get_line(&schwasm->lexer, prev);
+    Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+    if (!token || prev_line.line != token_line.line) {
+        sp_die(1, SCHWASM_FILE_FMT " Expected value\n", schwasm_file_arg(schwasm->filename, token_line));
     }
 
     if (sp_sv_eq(&sp_cstr_slice("$"), &token->sv)) {
         prev = schwasm_get_token(schwasm);
         token = schwasm_next_token(schwasm);
 
+        prev_line = splexer_token_get_line(&schwasm->lexer, prev);
+        token_line = splexer_token_get_line(&schwasm->lexer, token);
+
         if (!token) {
-            sp_die(1, "Line %d: Unexpected EOF", TODO_LINE);
+            sp_die(1, SCHWASM_FILE_FMT " Unexpected EOF\n", schwasm_file_arg(schwasm->filename, prev_line));
         }
 
-        if (splexer_token_get_line(&schwasm->lexer, prev).line != splexer_token_get_line(&schwasm->lexer, token).line) {
-            sp_die(1, "Line %d: Expected hexadecimal value after $", TODO_LINE);
+        if (prev_line.line != token_line.line) {
+            sp_die(1, SCHWASM_FILE_FMT " Expected hexadecimal value after $\n", schwasm_file_arg(schwasm->filename, prev_line));
         }
 
         if (token->type != TOK_IntLiteral && token->type != TOK_ID) {
-            sp_die(SP_ERROR, "Line %d: Unexpected token after $", TODO_LINE);
+            sp_die(1, SCHWASM_FILE_FMT " Unexpected token after $\n", schwasm_file_arg(schwasm->filename, prev_line));
         }
 
         return SCHWASM_VALUE_HEX;
     } else if (token->type == TOK_IntLiteral) {
         return SCHWASM_VALUE_DECIMAL;
     } else {
-        sp_die(1, "Line %d: Unexpected value", TODO_LINE);
+        sp_die(1, SCHWASM_FILE_FMT " Unexpected value\n", schwasm_file_arg(schwasm->filename, prev_line));
         return 1;
     }
 }
@@ -129,14 +135,16 @@ void ld_imm(struct Schwasm *schwasm, enum GCPU_REG reg) {
     switch (schwasm_expect_value(schwasm)) {
         case SCHWASM_VALUE_HEX:
             if (schwasm_get_token(schwasm)->sv.count > 2) {
-                sp_die(1, "Line %d: Register does not support loading %d-bit integers", TODO_LINE, (int) powl(2, schwasm_get_token(schwasm)->sv.count));
+                Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
+                sp_die(1, SCHWASM_FILE_FMT " Register does not support loading %d-bit integers\n", schwasm_file_arg(schwasm->filename, token_line), (int) powl(2, schwasm_get_token(schwasm)->sv.count));
             }
 
             errno = 0;
             int value = (int) strtol(schwasm_get_token(schwasm)->sv.ptr, NULL, 16);
 
             if (errno != 0) {
-                sp_die(1, "Line %d: Error parsing hexadecimal value", TODO_LINE);
+                Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
+                sp_die(1, SCHWASM_FILE_FMT " Error parsing hexadecimal value\n", schwasm_file_arg(schwasm->filename, token_line));
             }
 
             schwasm_create_node(schwasm, (uint8_t) value);
@@ -155,7 +163,8 @@ void ld(struct Schwasm *schwasm, enum GCPU_REG reg) {
     const Sp_Lexer_Token *token = schwasm_next_token(schwasm);
 
     if (!token) {
-        sp_die(1, "Line %d: Unexpected rhs", TODO_LINE);
+        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+        sp_die(1, SCHWASM_FILE_FMT " Unexpected rhs\n", schwasm_file_arg(schwasm->filename, token_line));
     }
 
     if (token->type == TOK_Pound) {
@@ -175,17 +184,17 @@ void cleanup() {
 
 int main(int argc, char **argv) {
     if (argc == 1) {
-        sp_die(1, "Not enough arguments (expected a filename)");
+        sp_die(1, "Not enough arguments (expected a filename)\n");
     }
     if (argc > 2) {
-        sp_die(1, "Too many arguments (expected 1, got %d)", argc - 1);
+        sp_die(1, "Too many arguments (expected 1, got %d)\n", argc - 1);
     }
 
-    schwasm = schwasm_init();
+    schwasm = schwasm_init(argv[1]);
     atexit(cleanup);
 
     if (splexer_init(&schwasm.lexer, argv[1]) != 0) {
-        sp_die(1, "Unable to open file: \"%s\"", argv[1]);
+        sp_die(1, "Unable to open file: \"%s\"\n", argv[1]);
     }
 
     while (schwasm.lexer.state != SPLEXER_TERMINATE) {
@@ -203,22 +212,26 @@ int main(int argc, char **argv) {
 
     const Sp_Lexer_Token *prev = NULL;
     const Sp_Lexer_Token *token = schwasm_get_token(&schwasm);
+    Sp_Lexer_Token_Line prev_line = {0};
+    Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm.lexer, token);
 
     if (!token) {
-        sp_die(1, "Line %d: Unexpected initial token", TODO_LINE);
+        sp_die(1, SCHWASM_FILE_FMT " Unexpected initial token\n", schwasm_file_arg(schwasm.filename, token_line));
     }
 
     do {
-        if (prev && splexer_token_get_line(&schwasm.lexer, prev).line != splexer_token_get_line(&schwasm.lexer, token).line) {
+        // prev_line is calculated at the end of previous iteration
+        token_line = splexer_token_get_line(&schwasm.lexer, token);
+        if (prev && prev_line.line != token_line.line) {
             schwasm.lexer_attr.busy = false;
         } else if (schwasm.lexer_attr.busy) { // some token after a completed instruction
-            sp_die(1, "Line %d: Trailing tokens after instruction", TODO_LINE);
+            sp_die(1, SCHWASM_FILE_FMT " Trailing tokens after instruction\n", schwasm_file_arg(schwasm.filename, token_line));
         }
 
         if (token->type != TOK_ID) {
             sp_die(1,
-                   "Line %d: Failed to parse unknown symbol \"%s\"",
-                   TODO_LINE,
+                   SCHWASM_FILE_FMT " Failed to parse unknown symbol \"%s\"\n",
+                   schwasm_file_arg(schwasm.filename, token_line),
                    SPLEXER_TOKENS_LITERAL[token->type]);
         }
 
@@ -234,10 +247,11 @@ int main(int argc, char **argv) {
         } else if (sp_sv_eq(&sp_cstr_slice("LDAB"), &token->sv)) {
             ld(&schwasm, GCPU_REGB);
         } else {
-            sp_die(1, "Line %d: Failed to parse unknown instruction \"" SP_SV_FMT "\"", TODO_LINE, sp_sv_arg(token->sv));
+            sp_die(1, SCHWASM_FILE_FMT " Failed to parse unknown instruction \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm.filename, token_line), sp_sv_arg(token->sv));
         }
 
         prev = schwasm_get_token(&schwasm);
+        prev_line = splexer_token_get_line(&schwasm.lexer, prev);
     } while ((token = schwasm_next_token(&schwasm)));
 
     while (schwasm.nodes.count > 0) {
