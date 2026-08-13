@@ -3,6 +3,8 @@
 #include <splexer.h>
 #include <sptl.h>
 
+#define ROM_SIZE 4096
+
 #define SCHWASM_FILE_FMT "%s:%ld:%ld:"
     #define schwasm_file_arg(name, tok_line) name, tok_line.line, tok_line.col
 
@@ -33,13 +35,27 @@ static inline struct Schwasm schwasm_init(const char *filename) {
             .cmp = &schwasm_node_lesser_cmp,
         },
         .filename = filename,
+        .addr = UINT16_MAX,
     };
 
     return schwasm;
 }
+
 static inline const Sp_Lexer_Token *schwasm_get_token(struct Schwasm *schwasm);
 
+static inline void schwasm_expect_org(struct Schwasm *schwasm) {
+    if (schwasm->addr == UINT16_MAX) {
+        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
+        sp_die(1, SCHWASM_FILE_FMT " No preceding ORG to define initial address\n", schwasm_file_arg(schwasm->filename, token_line));
+    }
+    else if (schwasm->addr >= ROM_SIZE) {
+        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
+        sp_die(1, SCHWASM_FILE_FMT " Address out of bounds\n", schwasm_file_arg(schwasm->filename, token_line));
+    }
+}
+
 static inline void schwasm_create_node(struct Schwasm *schwasm, uint8_t code) {
+    schwasm_expect_org(schwasm);
     if (sp_bitset_check(&schwasm->used_addrs, schwasm->addr)) {
         Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
         sp_die(1, SCHWASM_FILE_FMT " Address collision\n", schwasm_file_arg(schwasm->filename, token_line));
@@ -186,11 +202,13 @@ void ld_reg(struct Schwasm *schwasm) {
 }
 
 void ld(struct Schwasm *schwasm, enum GCPU_REG reg) {
+    schwasm_expect_org(schwasm);
+
     const Sp_Lexer_Token *token = schwasm_next_token(schwasm);
 
     if (!token) {
         Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
-        sp_die(1, SCHWASM_FILE_FMT " Unexpected rhs\n", schwasm_file_arg(schwasm->filename, token_line));
+        sp_die(1, SCHWASM_FILE_FMT " Expected rhs\n", schwasm_file_arg(schwasm->filename, token_line));
     }
 
     if (token->type == TOK_Pound) {
