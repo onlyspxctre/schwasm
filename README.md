@@ -1,17 +1,27 @@
 # schwasm — GCPU Assembler
 
-A lightweight assembler for **G-CPU**, targeting a 4K×8 ROM with a 12-bit address bus, outputting a `.mif` file. This is heavily based on the example assembler built for a simple RALU shown in `splexer` example source code.
+A lightweight assembler for **G-CPU**, targeting a 4K×8 ROM with a 12-bit address bus, outputting a `.mif` file. This is heavily based on the example assembler built for a simple RALU shown in `splexer` example source code. Currently supports Linux, with Windows and MacOS support slated for future release.
+
+Schwasm is designed according to the [**G-CPU Specification**](https://mil.ufl.edu/3701/labs/gcpu/G-CPU_Complete_Docs_5Apr2024.pdf), and strives for functional parity with the official, proprietary **G-CPU IDE**.
 
 ## Features
 
 - Assembles GCPU instructions into Intel-style memory initialization file (`.mif`)
 - Supports immediate addressing with hex (`$`) and decimal literals
+- Error reporting on line and column number
+    - Includes logical error reporting, such as ROM address collisions
 - Built on in-house tokenizer (`splexer`) backed by (`sptl.h`)
 
 ## Building
 
+To compile, simply run:
 ```bash
 make
+```
+
+To build an optimized, statically linked release binary, run:
+```bash
+make RELEASE=y
 ```
 
 ## Usage
@@ -26,9 +36,16 @@ The assembler reads assembly source and writes a `.mif`-format memory file to st
 
 **input.asm:**
 ```asm
+ORG $00
 LDAA #$AA // AA
 LDAB #$AB // AB
 LDAA #10 // 0A
+SUM_BA  // 14
+AND_AB  // 17
+OR_BA   // 18
+SHFA_L  // 1C
+COMA    // 1A
+INX     // 30
 ```
 
 **output.mif:**
@@ -48,15 +65,38 @@ BEGIN
 	0003 : AB;
 	0004 : 02;
 	0005 : 0A;
+	0006 : 14;
+	0007 : 17;
+	0008 : 18;
+	0009 : 1C;
+	000A : 1A;
+	000B : 30;
 END;
 ```
 
 ## Supported Instructions
 
-| Mnemonic | Description          |
-|----------|----------------------|
-| LDAA     | Load register A      |
-| ORG      | Set origin address   |
+| Mnemonic | Description                 |
+|----------|-----------------------------|
+| TAB      | Transfer A to B             |
+| TBA      | Transfer B to A             |
+| LDAA     | Load register A             |
+| LDAB     | Load register B             |
+| SUM_BA   | Add register B to A         |
+| SUM_AB   | Add register A to B         |
+| AND_BA   | AND register B into A       |
+| AND_AB   | AND register A into B       |
+| OR_BA    | OR register B into A        |
+| OR_AB    | OR register A into B        |
+| COMA     | Complement register A       |
+| COMB     | Complement register B       |
+| SHFA_L   | Shift register A left       |
+| SHFA_R   | Shift register A right      |
+| SHFB_L   | Shift register B left       |
+| SHFB_R   | Shift register B right      |
+| INX      | Increment register X        |
+| INY      | Increment register Y        |
+| ORG      | Set origin address          |
 
 ## License
 This project is licensed under the [MIT License](LICENSE).
