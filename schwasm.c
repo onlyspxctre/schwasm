@@ -283,7 +283,7 @@ void declare_directive(struct Schwasm *schwasm, enum Declare_Directive directive
 
             const Sp_Lexer_Token *next = schwasm_peek_token(schwasm);
             Sp_Lexer_Token_Line next_line = splexer_token_get_line(&schwasm->lexer, next);
-            if (next->type == TOK_Comma && splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm)).line == next_line.line) {
+            if (next && next->type == TOK_Comma && splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm)).line == next_line.line) {
                 schwasm_next_token(schwasm);
                 goto dc_loop;
             }
