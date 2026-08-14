@@ -6,7 +6,7 @@ export DEPSDIR := $(abspath ./deps)
 export INCLUDEDIR := $(abspath ./include)
 export LIBDIR := $(abspath ./lib)
 
-export SPLEXER_VERSION := 29ab3b3
+export SPLEXER_VERSION := 00a65a6
 
 RELEASE ?= n
 
@@ -47,12 +47,12 @@ $(BUILDDIR)/schwasm: schwasm.c $(LIBDIR)/libsplexer.so $(LIBDIR)/libsplexer.a $(
 
 $(LIBDIR)/libsplexer.a: $(DEPSDIR)/splexer
 	mkdir -p $(LIBDIR)
-	$(MAKE) -C $(DEPSDIR)/splexer all
+	$(MAKE) -C $(DEPSDIR)/splexer GRANULAR_TOK_UNKNOWN=y all
 	cp -f $(DEPSDIR)/splexer/build/libsplexer.a $@
 
 $(LIBDIR)/libsplexer.so: $(DEPSDIR)/splexer
 	mkdir -p $(LIBDIR)
-	$(MAKE) -C $(DEPSDIR)/splexer all
+	$(MAKE) -C $(DEPSDIR)/splexer GRANULAR_TOK_UNKNOWN=y all
 	cp -f $(DEPSDIR)/splexer/build/libsplexer.so $@
 endif
 

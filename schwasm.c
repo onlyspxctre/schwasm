@@ -327,12 +327,26 @@ int main(int argc, char **argv) {
         prev_line = splexer_token_get_line(&schwasm.lexer, prev);
     } while ((token = schwasm_next_token(&schwasm)));
 
-    while (schwasm.nodes.count > 0) {
-        struct Schwasm_Node node = sp_heap_top(&schwasm.nodes);
+    uint16_t next_addr = 0x0000;
+    struct Schwasm_Node node;
 
-        sp_sb_appendf(&generated, "%04X : %02X;\n", node.addr, node.code);
+    while (schwasm.nodes.count > 0) {
+        node = sp_heap_top(&schwasm.nodes);
+
+        // "calloc" unspecified memory regions
+        if (node.addr > next_addr) {
+            sp_sb_appendf(&generated, "[%04X..%04X]\t:\t%02X;\n", next_addr, node.addr - 1, 0x00);
+        }
+        next_addr = node.addr + 1;
+
+        sp_sb_appendf(&generated, "%04X\t\t:\t%02X;\n", node.addr, node.code);
 
         sp_heap_pop(&schwasm.nodes);
+    }
+
+    // "calloc" until end
+    if (0x0FFF > next_addr) {
+        sp_sb_appendf(&generated, "[%04X..%04X]\t:\t%02X;\n", next_addr, 0x0FFF, 0x00);
     }
 
     sp_sb_appendf(&generated, "END;\n");
