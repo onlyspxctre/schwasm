@@ -135,6 +135,19 @@ static inline void schwasm_destroy(struct Schwasm *schwasm) {
     sp_heap_free(&schwasm->nodes);
 }
 
+static inline int parse_hex_or_die(struct Schwasm *schwasm, const Sp_Lexer_Token *token) {
+    errno = 0;
+    char *endptr;
+    int value = (int) strtol(token->sv.ptr, &endptr, 16);
+
+    if (errno != 0 || endptr - token->sv.ptr < (long) (token->sv.count + token->int_lit.suffixes.count)) {
+        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+        sp_die(1, SCHWASM_FILE_FMT " Error parsing hexadecimal value\n", schwasm_file_arg(schwasm->filename, token_line));
+    }
+
+    return value;
+}
+
 enum GCPU_REG {
     GCPU_REGA,
     GCPU_REGB,
@@ -144,21 +157,23 @@ enum GCPU_REG {
 
 void org(struct Schwasm *schwasm) {
     int value;
+    const Sp_Lexer_Token *token;
     switch (schwasm_expect_value(schwasm)) {
         case SCHWASM_VALUE_HEX:
-            value = (int) strtol(schwasm_get_token(schwasm)->sv.ptr, NULL, 16);
+            value = parse_hex_or_die(schwasm, (token = schwasm_get_token(schwasm)));
 
-            if (schwasm_get_token(schwasm)->sv.count > 4) { // exceeds 4 hex digits
-                Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
+            if (token->sv.count + token->int_lit.suffixes.count > 4) { // exceeds 4 hex digits
+                Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
                 sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%X) \n", schwasm_file_arg(schwasm->filename, token_line), value);
             }
 
             schwasm->addr = (uint16_t) value;
             break;
         case SCHWASM_VALUE_DECIMAL:
-            value = (int) schwasm_get_token(schwasm)->int_lit.value;
+            // TODO: decimal check if out of range
+            value = (int) (token = schwasm_get_token(schwasm))->int_lit.value;
             if (value > UINT16_MAX) {
-                Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
+                Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
                 sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (%d) \n", schwasm_file_arg(schwasm->filename, token_line), value);
             }
 
@@ -183,24 +198,22 @@ void ld_imm(struct Schwasm *schwasm, enum GCPU_REG reg) {
             break;
     }
 
+    const Sp_Lexer_Token *token;
+    int value;
+
     switch (schwasm_expect_value(schwasm)) {
         case SCHWASM_VALUE_HEX:
-            if (schwasm_get_token(schwasm)->sv.count > 2) {
-                Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
-                sp_die(1, SCHWASM_FILE_FMT " Register does not support loading %d-bit integers\n", schwasm_file_arg(schwasm->filename, token_line), (int) powl(2, schwasm_get_token(schwasm)->sv.count));
-            }
+            value = parse_hex_or_die(schwasm, (token = schwasm_get_token(schwasm)));
 
-            errno = 0;
-            int value = (int) strtol(schwasm_get_token(schwasm)->sv.ptr, NULL, 16);
-
-            if (errno != 0) {
-                Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
-                sp_die(1, SCHWASM_FILE_FMT " Error parsing hexadecimal value\n", schwasm_file_arg(schwasm->filename, token_line));
+            if (token->sv.count + token->int_lit.suffixes.count > 2) {
+                Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+                sp_die(1, SCHWASM_FILE_FMT " Register does not support loading %d-bit integers\n", schwasm_file_arg(schwasm->filename, token_line), (int) powl(2, token->sv.count + token->int_lit.suffixes.count));
             }
 
             schwasm_create_node(schwasm, (uint8_t) value);
             break;
         case SCHWASM_VALUE_DECIMAL:
+            // TODO: check if out of range
             schwasm_create_node(schwasm, (uint8_t) schwasm_get_token(schwasm)->int_lit.value);
             break;
     }
@@ -256,27 +269,23 @@ void declare_directive(struct Schwasm *schwasm, enum Declare_Directive directive
         sp_die(1, SCHWASM_FILE_FMT " Failed to parse assembly directive", schwasm_file_arg(schwasm->filename, prev_line));
     }
 
+    int value;
     switch (directive) {
         case DC_B:
         dc_loop:
             switch (schwasm_expect_value(schwasm)) {
                 case SCHWASM_VALUE_HEX:
-                    if (schwasm_get_token(schwasm)->sv.count > 2) {
+                    if (schwasm_get_token(schwasm)->sv.count + schwasm_get_token(schwasm)->int_lit.suffixes.count > 2) {
                         Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
-                        sp_die(1, SCHWASM_FILE_FMT " ROM address does not support %d-bit integers\n", schwasm_file_arg(schwasm->filename, token_line), (int) powl(2, schwasm_get_token(schwasm)->sv.count));
+                        sp_die(1, SCHWASM_FILE_FMT " ROM address does not support %d-bit integers\n", schwasm_file_arg(schwasm->filename, token_line), (int) powl(2, schwasm_get_token(schwasm)->sv.count + schwasm_get_token(schwasm)->int_lit.suffixes.count));
                     }
 
-                    errno = 0;
-                    int value = (int) strtol(schwasm_get_token(schwasm)->sv.ptr, NULL, 16);
-
-                    if (errno != 0) {
-                        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
-                        sp_die(1, SCHWASM_FILE_FMT " Error parsing hexadecimal value\n", schwasm_file_arg(schwasm->filename, token_line));
-                    }
+                    value = parse_hex_or_die(schwasm, schwasm_get_token(schwasm));
 
                     schwasm_create_node(schwasm, (uint8_t) value);
                     break;
                 case SCHWASM_VALUE_DECIMAL:
+                    // TODO: check if out of range
                     schwasm_create_node(schwasm, (uint8_t) schwasm_get_token(schwasm)->int_lit.value);
                     break;
             }
@@ -291,24 +300,19 @@ void declare_directive(struct Schwasm *schwasm, enum Declare_Directive directive
         case DS_B:
             switch (schwasm_expect_value(schwasm)) {
                 case SCHWASM_VALUE_HEX:
-                    errno = 0;
-                    unsigned int value = (unsigned int) strtol(schwasm_get_token(schwasm)->sv.ptr, NULL, 16);
-
-                    if (errno != 0) {
-                        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
-                        sp_die(1, SCHWASM_FILE_FMT " Error parsing hexadecimal value\n", schwasm_file_arg(schwasm->filename, token_line));
-                    }
+                    value = parse_hex_or_die(schwasm, schwasm_get_token(schwasm));
 
                     // TODO: turn this into a span definition instead of spamming memory segment definitions
-                    for (unsigned int i = 0; i < value; ++i) {
+                    for (int i = 0; i < value; ++i) {
                         schwasm_create_node(schwasm, 0x00);
                     }
                     break;
                 case SCHWASM_VALUE_DECIMAL:
-                    value = (unsigned int) schwasm_get_token(schwasm)->int_lit.value;
+                    // TODO: check if out of range
+                    value = (int) schwasm_get_token(schwasm)->int_lit.value;
 
                     // TODO: turn this into a span definition instead of spamming memory segment definitions
-                    for (unsigned int i = 0; i < value; ++i) {
+                    for (int i = 0; i < value; ++i) {
                         schwasm_create_node(schwasm, 0x00);
                     }
                     break;

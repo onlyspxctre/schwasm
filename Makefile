@@ -6,7 +6,7 @@ export DEPSDIR := $(abspath ./deps)
 export INCLUDEDIR := $(abspath ./include)
 export LIBDIR := $(abspath ./lib)
 
-export SPLEXER_VERSION := 00a65a6
+export SPLEXER_VERSION := c5bdd89
 
 RELEASE ?= n
 
