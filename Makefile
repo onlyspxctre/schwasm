@@ -6,7 +6,7 @@ export DEPSDIR := $(abspath ./deps)
 export INCLUDEDIR := $(abspath ./include)
 export LIBDIR := $(abspath ./lib)
 
-SPLEXER_VERSION := 9bcd516
+SPLEXER_VERSION := 58103af
 SPLEXER_FLAGS := GRANULAR_TOK_UNKNOWN=y NO_MULTICOMMENT=y
 
 RELEASE ?= n
