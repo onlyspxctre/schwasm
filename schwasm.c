@@ -226,11 +226,12 @@ void ld_reg(struct Schwasm *schwasm) {
 void ld(struct Schwasm *schwasm, enum GCPU_REG reg) {
     schwasm_expect_org(schwasm);
 
+    const Sp_Lexer_Token *prev = schwasm_get_token(schwasm);
     const Sp_Lexer_Token *token = schwasm_next_token(schwasm);
 
     if (!token) {
-        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
-        sp_die(1, SCHWASM_FILE_FMT " Expected rhs\n", schwasm_file_arg(schwasm->filename, token_line));
+        Sp_Lexer_Token_Line prev_line = splexer_token_get_line(&schwasm->lexer, prev);
+        sp_die(1, SCHWASM_FILE_FMT " Expected rhs\n", schwasm_file_arg(schwasm->filename, prev_line));
     }
 
     if (token->type == TOK_Pound) {
@@ -363,7 +364,10 @@ int main(int argc, char **argv) {
     Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm.lexer, token);
 
     if (!token) {
-        sp_die(1, SCHWASM_FILE_FMT " Unexpected initial token\n", schwasm_file_arg(schwasm.filename, token_line));
+        sp_die(1, SCHWASM_FILE_FMT " Unexpected initial token\n", schwasm_file_arg(schwasm.filename, ((Sp_Lexer_Token_Line) {
+                                                                                                         .line = 1,
+                                                                                                         .col = 1,
+                                                                                                     })));
     }
 
     do {
