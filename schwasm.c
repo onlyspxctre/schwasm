@@ -207,13 +207,18 @@ void ld_imm(struct Schwasm *schwasm, enum GCPU_REG reg) {
 
             if (token->sv.count + token->int_lit.suffixes.count > 2) {
                 Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
-                sp_die(1, SCHWASM_FILE_FMT " Register does not support loading %d-bit integers\n", schwasm_file_arg(schwasm->filename, token_line), (int) powl(2, token->sv.count + token->int_lit.suffixes.count));
+                sp_die(1, SCHWASM_FILE_FMT " Value too large; ROM word size is 8-bit\n", schwasm_file_arg(schwasm->filename, token_line));
+                // sp_die(1, SCHWASM_FILE_FMT " Register does not support loading %d-bit integers\n", schwasm_file_arg(schwasm->filename, token_line), (int) powl(2, token->sv.count + token->int_lit.suffixes.count));
             }
 
             schwasm_create_node(schwasm, (uint8_t) value);
             break;
         case SCHWASM_VALUE_DECIMAL:
-            // TODO: check if out of range
+            value = (int) schwasm_get_token(schwasm)->int_lit.value;
+            if (value > UINT8_MAX) {
+                Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
+                sp_die(1, SCHWASM_FILE_FMT " Value too large; ROM word size is 8-bit\n", schwasm_file_arg(schwasm->filename, token_line));
+            }
             schwasm_create_node(schwasm, (uint8_t) schwasm_get_token(schwasm)->int_lit.value);
             break;
     }
@@ -278,7 +283,8 @@ void declare_directive(struct Schwasm *schwasm, enum Declare_Directive directive
                 case SCHWASM_VALUE_HEX:
                     if (schwasm_get_token(schwasm)->sv.count + schwasm_get_token(schwasm)->int_lit.suffixes.count > 2) {
                         Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
-                        sp_die(1, SCHWASM_FILE_FMT " ROM address does not support %d-bit integers\n", schwasm_file_arg(schwasm->filename, token_line), (int) powl(2, schwasm_get_token(schwasm)->sv.count + schwasm_get_token(schwasm)->int_lit.suffixes.count));
+                        sp_die(1, SCHWASM_FILE_FMT " Value too large; ROM word size is 8-bit\n", schwasm_file_arg(schwasm->filename, token_line));
+                        // sp_die(1, SCHWASM_FILE_FMT " ROM address does not support %d-bit integers\n", schwasm_file_arg(schwasm->filename, token_line), (int) powl(2, schwasm_get_token(schwasm)->sv.count + schwasm_get_token(schwasm)->int_lit.suffixes.count));
                     }
 
                     value = parse_hex_or_die(schwasm, schwasm_get_token(schwasm));
@@ -286,7 +292,11 @@ void declare_directive(struct Schwasm *schwasm, enum Declare_Directive directive
                     schwasm_create_node(schwasm, (uint8_t) value);
                     break;
                 case SCHWASM_VALUE_DECIMAL:
-                    // TODO: check if out of range
+                    value = (int) schwasm_get_token(schwasm)->int_lit.value;
+                    if (value > UINT8_MAX) {
+                        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
+                        sp_die(1, SCHWASM_FILE_FMT " Value too large; ROM word size is 8-bit\n", schwasm_file_arg(schwasm->filename, token_line));
+                    }
                     schwasm_create_node(schwasm, (uint8_t) schwasm_get_token(schwasm)->int_lit.value);
                     break;
             }
