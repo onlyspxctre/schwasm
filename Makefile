@@ -14,7 +14,7 @@ WINDOWS ?= n
 ifneq ($(WINDOWS),n)
 export CC := x86_64-w64-mingw32-gcc
 export CFLAGS := -Wall -Wextra -std=c11 -I$(INCLUDEDIR)
-export LIBS := -l:libsplexer.dll -lm
+export LIBS := -l:libsplexer.dll
 
 all: $(BUILDDIR)/schwasm.exe
 
@@ -30,7 +30,7 @@ $(LIBDIR)/libsplexer.dll: $(BUILDDIR)/splexer
 else
 export CC := clang
 export CFLAGS := -Wall -Wextra -std=c11 -fcolor-diagnostics -I$(INCLUDEDIR)
-export LIBS := -lsplexer -lm
+export LIBS := -lsplexer
 
 ifneq ($(RELEASE),n)
 CFLAGS += -O2 -static

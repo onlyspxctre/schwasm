@@ -1,5 +1,4 @@
 #include <errno.h>
-#include <math.h>
 #include <splexer.h>
 #include <sptl.h>
 
