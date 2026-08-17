@@ -173,8 +173,6 @@ static inline void schwasm_create_node(struct Schwasm *schwasm, enum Schwasm_Op 
             node.dword = dword;
             break;
         case 1:
-            node.word = (uint8_t) dword;
-            break;
         case 2:
             node.word = (uint8_t) dword;
             break;
@@ -307,69 +305,92 @@ void org(struct Schwasm *schwasm) {
     schwasm->addr_valid = true;
 }
 
-void ld_imm(struct Schwasm *schwasm, enum GCPU_REG reg) {
-    enum Schwasm_Op op;
-    switch (reg) {
-        case GCPU_REGA:
-            op = SCHWASM_OP_LDAA_IMM;
-            break;
-        case GCPU_REGB:
-            op = SCHWASM_OP_LDAB_IMM;
-            break;
-        case GCPU_REGX:
-            op = SCHWASM_OP_LDX_IMM;
-            break;
-        case GCPU_REGY:
-            op = SCHWASM_OP_LDY_IMM;
-            break;
-    }
-
-    const Sp_Lexer_Token *token;
-    int value;
-
-    switch (schwasm_expect_value(schwasm)) {
-        case SCHWASM_VALUE_HEX:
-            value = parse_hex_or_die(schwasm, (token = schwasm_get_token(schwasm)));
-
-            // TODO: this would be wrong for LDX and LDY
-            if (token->sv.count + token->int_lit.suffixes.count > 2) {
-                Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
-                sp_die(1, SCHWASM_FILE_FMT " Value too large; ROM word size is 8-bit\n", schwasm_file_arg(schwasm->filename, token_line));
-            }
-            break;
-        case SCHWASM_VALUE_DECIMAL:
-            value = (int) schwasm_get_token(schwasm)->int_lit.value;
-
-            // TODO: this would be wrong for LDX and LDY
-            if (value > UINT8_MAX) {
-                Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
-                sp_die(1, SCHWASM_FILE_FMT " Value too large; ROM word size is 8-bit\n", schwasm_file_arg(schwasm->filename, token_line));
-            }
-            break;
-    }
-
-    schwasm_create_node(schwasm, op, (uint16_t) value);
-}
-
-void ld_reg(struct Schwasm *schwasm) {
-    (void) schwasm;
-}
 
 void ld(struct Schwasm *schwasm, enum GCPU_REG reg) {
     schwasm_expect_org(schwasm);
 
-    const Sp_Lexer_Token *prev = schwasm_get_token(schwasm);
-    const Sp_Lexer_Token *token = schwasm_next_token(schwasm);
+    const Sp_Lexer_Token *token = schwasm_get_token(schwasm);
+    const Sp_Lexer_Token *next =  schwasm_peek_token(schwasm);
 
-    if (!token) {
-        Sp_Lexer_Token_Line prev_line = splexer_token_get_line(&schwasm->lexer, prev);
-        sp_die(1, SCHWASM_FILE_FMT " Expected rhs\n", schwasm_file_arg(schwasm->filename, prev_line));
+    if (!next) {
+        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+        sp_die(1, SCHWASM_FILE_FMT " Expected rhs\n", schwasm_file_arg(schwasm->filename, token_line));
     }
 
-    if (token->type == TOK_Pound) {
-        ld_imm(schwasm, reg);
-    } else {
-        ld_reg(schwasm);
+    enum Schwasm_Op op;
+    int value;
+    if (next->type == TOK_Pound) { // immediate addressing
+        schwasm_next_token(schwasm); // consume the TOK_Pound
+
+        switch (reg) {
+            case GCPU_REGA:
+                op = SCHWASM_OP_LDAA_IMM;
+                break;
+            case GCPU_REGB:
+                op = SCHWASM_OP_LDAB_IMM;
+                break;
+            case GCPU_REGX:
+                op = SCHWASM_OP_LDX_IMM;
+                break;
+            case GCPU_REGY:
+                op = SCHWASM_OP_LDY_IMM;
+                break;
+        }
+
+
+        switch (schwasm_expect_value(schwasm)) {
+            case SCHWASM_VALUE_HEX:
+                value = parse_hex_or_die(schwasm, (token = schwasm_get_token(schwasm)));
+
+                // TODO: this would be wrong for LDX and LDY
+                if (token->sv.count + token->int_lit.suffixes.count > 2) {
+                    Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+                    sp_die(1, SCHWASM_FILE_FMT " Value too large; ROM word size is 8-bit\n", schwasm_file_arg(schwasm->filename, token_line));
+                }
+                break;
+            case SCHWASM_VALUE_DECIMAL:
+                value = (int) schwasm_get_token(schwasm)->int_lit.value;
+
+                // TODO: this would be wrong for LDX and LDY
+                if (value > UINT8_MAX) {
+                    Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
+                    sp_die(1, SCHWASM_FILE_FMT " Value too large; ROM word size is 8-bit\n", schwasm_file_arg(schwasm->filename, token_line));
+                }
+                break;
+        }
+
+        schwasm_create_node(schwasm, op, (uint16_t) value);
+    } else { // extended addressing
+        switch (reg) {
+            case GCPU_REGA:
+                op = SCHWASM_OP_LDAA;
+                break;
+            case GCPU_REGB:
+                op = SCHWASM_OP_LDAB;
+                break;
+            case GCPU_REGX:
+                op = SCHWASM_OP_LDX;
+                break;
+            case GCPU_REGY:
+                op = SCHWASM_OP_LDY;
+                break;
+        }
+
+        switch (schwasm_expect_value(schwasm)) {
+            case SCHWASM_VALUE_HEX:
+                value = parse_hex_or_die(schwasm, (token = schwasm_get_token(schwasm)));
+                break;
+            case SCHWASM_VALUE_DECIMAL:
+                value = (int) (token = schwasm_get_token(schwasm))->int_lit.value;
+                break;
+        }
+
+        if (value >= ROM_SIZE) {
+            Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+            sp_die(1, SCHWASM_FILE_FMT " Address out of bounds\n", schwasm_file_arg(schwasm->filename, token_line));
+        }
+
+        schwasm_create_node(schwasm, op, (uint16_t) value);
     }
 }
 
