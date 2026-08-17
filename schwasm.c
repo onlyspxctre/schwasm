@@ -27,6 +27,7 @@ struct Schwasm {
         bool busy;
     } lexer_attr;
     uint16_t addr; // GCPU uses a 4K ROM, only requires 12-bit wide address; 16-bits is more than enough
+    bool addr_valid;
     const char *filename;
 };
 
@@ -45,7 +46,7 @@ static inline struct Schwasm schwasm_init(const char *filename) {
 static inline const Sp_Lexer_Token *schwasm_get_token(struct Schwasm *schwasm);
 
 static inline void schwasm_expect_org(struct Schwasm *schwasm) {
-    if (schwasm->addr == UINT16_MAX) {
+    if (!schwasm->addr_valid) {
         Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
         sp_die(1, SCHWASM_FILE_FMT " No preceding ORG to define initial address\n", schwasm_file_arg(schwasm->filename, token_line));
     } else if (schwasm->addr >= ROM_SIZE) {
@@ -179,6 +180,8 @@ void org(struct Schwasm *schwasm) {
             schwasm->addr = (uint16_t) value;
             break;
     }
+
+    schwasm->addr_valid = true;
 }
 
 void ld_imm(struct Schwasm *schwasm, enum GCPU_REG reg) {
