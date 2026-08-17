@@ -446,6 +446,50 @@ void st(struct Schwasm *schwasm, enum GCPU_REG reg) {
     }
 }
 
+void branch(struct Schwasm *schwasm, enum Schwasm_Op op) {
+    switch (op) {
+        case SCHWASM_OP_BNE:
+        case SCHWASM_OP_BEQ:
+        case SCHWASM_OP_BN:
+        case SCHWASM_OP_BP:
+            break;
+        default:
+            sp_unreachable();
+    }
+
+    schwasm_expect_org(schwasm);
+
+    const Sp_Lexer_Token *token = schwasm_get_token(schwasm);
+    const Sp_Lexer_Token *next =  schwasm_peek_token(schwasm);
+
+    if (!next) {
+        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+        sp_die(1, SCHWASM_FILE_FMT " Expected rhs\n", schwasm_file_arg(schwasm->filename, token_line));
+    }
+
+    int addr;
+    if (next->type == TOK_Pound) {
+        Sp_Lexer_Token_Line next_line = splexer_token_get_line(&schwasm->lexer, next);
+        sp_die(1, SCHWASM_FILE_FMT " Unexpected immediate value; branch operations require lower-order byte of addr\n", schwasm_file_arg(schwasm->filename, next_line));
+    } else {
+        switch (schwasm_expect_value(schwasm)) {
+            case SCHWASM_VALUE_HEX:
+                addr = parse_hex_or_die(schwasm, (token = schwasm_get_token(schwasm)));
+                break;
+            case SCHWASM_VALUE_DECIMAL:
+                addr = (int) (token = schwasm_get_token(schwasm))->int_lit.value;
+                break;
+        }
+
+        if (addr >= UINT8_MAX) {
+            Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+            sp_die(1, SCHWASM_FILE_FMT " Cannot branch to (0x%04X)\n", schwasm_file_arg(schwasm->filename, token_line), addr);
+        }
+
+        schwasm_create_node(schwasm, op, (uint16_t) addr);
+    }
+}
+
 enum Declare_Directive {
     DC_B,
     DS_B
@@ -636,6 +680,14 @@ int main(int argc, char **argv) {
             schwasm_create_node(&schwasm, SCHWASM_OP_SHFB_L, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("SHFB_R"), &token->sv)) {
             schwasm_create_node(&schwasm, SCHWASM_OP_SHFB_R, 0);
+        } else if (sp_sv_eq(&sp_cstr_slice("BNE"), &token->sv)) {
+            branch(&schwasm, SCHWASM_OP_BNE);
+        } else if (sp_sv_eq(&sp_cstr_slice("BEQ"), &token->sv)) {
+            branch(&schwasm, SCHWASM_OP_BEQ);
+        } else if (sp_sv_eq(&sp_cstr_slice("BN"), &token->sv)) {
+            branch(&schwasm, SCHWASM_OP_BN);
+        } else if (sp_sv_eq(&sp_cstr_slice("BP"), &token->sv)) {
+            branch(&schwasm, SCHWASM_OP_BP);
         } else if (sp_sv_eq(&sp_cstr_slice("INX"), &token->sv)) {
             schwasm_create_node(&schwasm, SCHWASM_OP_INX, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("INY"), &token->sv)) {
