@@ -337,24 +337,28 @@ void ld(struct Schwasm *schwasm, enum GCPU_REG reg) {
                 break;
         }
 
-
         switch (schwasm_expect_value(schwasm)) {
             case SCHWASM_VALUE_HEX:
                 value = parse_hex_or_die(schwasm, (token = schwasm_get_token(schwasm)));
-
-                // TODO: this would be wrong for LDX and LDY
-                if (token->sv.count + token->int_lit.suffixes.count > 2) {
-                    Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
-                    sp_die(1, SCHWASM_FILE_FMT " Value too large; ROM word size is 8-bit\n", schwasm_file_arg(schwasm->filename, token_line));
-                }
                 break;
             case SCHWASM_VALUE_DECIMAL:
-                value = (int) schwasm_get_token(schwasm)->int_lit.value;
+                value = (int) (token = schwasm_get_token(schwasm))->int_lit.value;
+                break;
+        }
 
-                // TODO: this would be wrong for LDX and LDY
+        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+
+        switch (reg) {
+            case GCPU_REGA:
+            case GCPU_REGB:
                 if (value > UINT8_MAX) {
-                    Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
-                    sp_die(1, SCHWASM_FILE_FMT " Value too large; ROM word size is 8-bit\n", schwasm_file_arg(schwasm->filename, token_line));
+                    sp_die(1, SCHWASM_FILE_FMT " Value too large; register is 8-bits\n", schwasm_file_arg(schwasm->filename, token_line));
+                }
+                break;
+            case GCPU_REGX:
+            case GCPU_REGY:
+                if (value > UINT16_MAX) {
+                    sp_die(1, SCHWASM_FILE_FMT " Value too large; register is 16-bits\n", schwasm_file_arg(schwasm->filename, token_line));
                 }
                 break;
         }
@@ -552,6 +556,10 @@ int main(int argc, char **argv) {
             ld(&schwasm, GCPU_REGA);
         } else if (sp_sv_eq(&sp_cstr_slice("LDAB"), &token->sv)) {
             ld(&schwasm, GCPU_REGB);
+        } else if (sp_sv_eq(&sp_cstr_slice("LDX"), &token->sv)) {
+            ld(&schwasm, GCPU_REGX);
+        } else if (sp_sv_eq(&sp_cstr_slice("LDY"), &token->sv)) {
+            ld(&schwasm, GCPU_REGY);
         } else if (sp_sv_eq(&sp_cstr_slice("SUM_BA"), &token->sv)) {
             schwasm_create_node(&schwasm, SCHWASM_OP_SUM_BA, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("SUM_AB"), &token->sv)) {
