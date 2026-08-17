@@ -397,6 +397,55 @@ void ld(struct Schwasm *schwasm, enum GCPU_REG reg) {
     }
 }
 
+void st(struct Schwasm *schwasm, enum GCPU_REG reg) {
+    schwasm_expect_org(schwasm);
+
+    const Sp_Lexer_Token *token = schwasm_get_token(schwasm);
+    const Sp_Lexer_Token *next =  schwasm_peek_token(schwasm);
+
+    if (!next) {
+        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+        sp_die(1, SCHWASM_FILE_FMT " Expected rhs\n", schwasm_file_arg(schwasm->filename, token_line));
+    }
+
+    enum Schwasm_Op op;
+    int addr;
+
+    if (next->type == TOK_Pound) {
+        Sp_Lexer_Token_Line next_line = splexer_token_get_line(&schwasm->lexer, next);
+        sp_die(1, SCHWASM_FILE_FMT " Unexpected immediate value; store operations cannot be performed onto immediate value\n", schwasm_file_arg(schwasm->filename, next_line));
+    } else {
+        switch (reg) {
+            case GCPU_REGA:
+                op = SCHWASM_OP_STAA;
+                break;
+            case GCPU_REGB:
+                op = SCHWASM_OP_STAB;
+                break;
+            case GCPU_REGX:
+            case GCPU_REGY:
+                sp_unreachable();
+                break;
+        }
+
+        switch (schwasm_expect_value(schwasm)) {
+            case SCHWASM_VALUE_HEX:
+                addr = parse_hex_or_die(schwasm, (token = schwasm_get_token(schwasm)));
+                break;
+            case SCHWASM_VALUE_DECIMAL:
+                addr = (int) (token = schwasm_get_token(schwasm))->int_lit.value;
+                break;
+        }
+
+        if (addr >= ROM_SIZE) {
+            Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+            sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04X)\n", schwasm_file_arg(schwasm->filename, token_line), addr);
+        }
+
+        schwasm_create_node(schwasm, op, (uint16_t) addr);
+    }
+}
+
 enum Declare_Directive {
     DC_B,
     DS_B
@@ -559,6 +608,10 @@ int main(int argc, char **argv) {
             ld(&schwasm, GCPU_REGX);
         } else if (sp_sv_eq(&sp_cstr_slice("LDY"), &token->sv)) {
             ld(&schwasm, GCPU_REGY);
+        } else if (sp_sv_eq(&sp_cstr_slice("STAA"), &token->sv)) {
+            st(&schwasm, GCPU_REGA);
+        } else if (sp_sv_eq(&sp_cstr_slice("STAB"), &token->sv)) {
+            st(&schwasm, GCPU_REGB);
         } else if (sp_sv_eq(&sp_cstr_slice("SUM_BA"), &token->sv)) {
             schwasm_create_node(&schwasm, SCHWASM_OP_SUM_BA, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("SUM_AB"), &token->sv)) {
