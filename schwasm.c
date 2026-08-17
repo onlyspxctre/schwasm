@@ -291,7 +291,6 @@ void org(struct Schwasm *schwasm) {
             schwasm->addr = (uint16_t) value;
             break;
         case SCHWASM_VALUE_DECIMAL:
-            // TODO: decimal check if out of range
             value = (int) (token = schwasm_get_token(schwasm))->int_lit.value;
             if (value > UINT16_MAX) {
                 Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
@@ -391,7 +390,7 @@ void ld(struct Schwasm *schwasm, enum GCPU_REG reg) {
 
         if (value >= ROM_SIZE) {
             Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
-            sp_die(1, SCHWASM_FILE_FMT " Address out of bounds\n", schwasm_file_arg(schwasm->filename, token_line));
+            sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04X)\n", schwasm_file_arg(schwasm->filename, token_line), value);
         }
 
         schwasm_create_node(schwasm, op, (uint16_t) value);
