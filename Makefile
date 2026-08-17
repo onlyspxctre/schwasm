@@ -9,10 +9,8 @@ export LIBDIR := $(abspath ./lib)
 SPLEXER_VERSION := 58103af
 SPLEXER_FLAGS := GRANULAR_TOK_UNKNOWN=y NO_MULTICOMMENT=y
 
-RELEASE ?= n
 
-WINDOWS ?= n
-ifneq ($(WINDOWS),n)
+ifneq ($(WINDOWS),)
 export CC := x86_64-w64-mingw32-gcc
 export CFLAGS := -Wall -Wextra -std=c11 -I$(INCLUDEDIR)
 export LIBS := -l:libsplexer.dll
@@ -33,7 +31,7 @@ export CC := clang
 export CFLAGS := -Wall -Wextra -std=c11 -fcolor-diagnostics -I$(INCLUDEDIR)
 export LIBS := -lsplexer
 
-ifneq ($(RELEASE),n)
+ifneq ($(RELEASE),)
 CFLAGS += -O2 -static
 BUILDDIR := $(abspath ./build/release)
 else

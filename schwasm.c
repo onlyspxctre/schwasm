@@ -7,11 +7,103 @@
 #define SCHWASM_FILE_FMT "%s:%ld:%ld:"
 #define schwasm_file_arg(name, tok_line) name, tok_line.line, tok_line.col
 
-// TODO: instead of generating dumb nodes, we should generate abstract syntax.
-// This will allow us to decouple the interpreter side from the IR/machine-code generator.
+enum Schwasm_Op {
+    SCHWASM_OP_TAB = 0x00,
+    SCHWASM_OP_TBA = 0x01,
+    SCHWASM_OP_LDAA_IMM = 0x02,
+    SCHWASM_OP_LDAB_IMM = 0x03,
+    SCHWASM_OP_LDAA = 0x04,
+    SCHWASM_OP_LDAB = 0x05,
+    SCHWASM_OP_STAA = 0x06,
+    SCHWASM_OP_STAB = 0x07,
+    SCHWASM_OP_LDX_IMM = 0x08,
+    SCHWASM_OP_LDY_IMM = 0x09,
+    SCHWASM_OP_LDX = 0x0A,
+    SCHWASM_OP_LDY = 0x0B,
+    SCHWASM_OP_LDAA_X = 0x0C,
+    SCHWASM_OP_LDAA_Y = 0x0D,
+    SCHWASM_OP_LDAB_X = 0x0E,
+    SCHWASM_OP_LDAB_Y = 0x0F,
+    SCHWASM_OP_STAA_X = 0x10,
+    SCHWASM_OP_STAA_Y = 0x11,
+    SCHWASM_OP_STAB_X = 0x12,
+    SCHWASM_OP_STAB_Y = 0x13,
+    SCHWASM_OP_SUM_BA = 0x14,
+    SCHWASM_OP_SUM_AB = 0x15,
+    SCHWASM_OP_AND_BA = 0x16,
+    SCHWASM_OP_AND_AB = 0x17,
+    SCHWASM_OP_OR_BA = 0x18,
+    SCHWASM_OP_OR_AB = 0x19,
+    SCHWASM_OP_COMA = 0x1A,
+    SCHWASM_OP_COMB = 0x1B,
+    SCHWASM_OP_SHFA_L = 0x1C,
+    SCHWASM_OP_SHFA_R = 0x1D,
+    SCHWASM_OP_SHFB_L = 0x1E,
+    SCHWASM_OP_SHFB_R = 0x1F,
+    SCHWASM_OP_BEQ = 0x20,
+    SCHWASM_OP_BNE = 0x21,
+    SCHWASM_OP_BN = 0x22,
+    SCHWASM_OP_BP = 0x23,
+    SCHWASM_OP_INX = 0x30,
+    SCHWASM_OP_INY = 0x31,
+    SCHWASM_AD_DC = 0x24,
+    SCHWASM_OP_UNKNOWN = 0x25,
+};
+
+static uint8_t SCHWASM_OP_COUNT[] = {
+    [SCHWASM_OP_TAB] = 1,
+    [SCHWASM_OP_TBA] = 1,
+    [SCHWASM_OP_LDAA_IMM] = 2,
+    [SCHWASM_OP_LDAB_IMM] = 2,
+    [SCHWASM_OP_LDAA] = 3,
+    [SCHWASM_OP_LDAB] = 3,
+    [SCHWASM_OP_STAA] = 3,
+    [SCHWASM_OP_STAB] = 3,
+    [SCHWASM_OP_LDX_IMM] = 3,
+    [SCHWASM_OP_LDY_IMM] = 3,
+    [SCHWASM_OP_LDX] = 3,
+    [SCHWASM_OP_LDY] = 3,
+    [SCHWASM_OP_LDAA_X] = 2,
+    [SCHWASM_OP_LDAA_Y] = 2,
+    [SCHWASM_OP_LDAB_X] = 2,
+    [SCHWASM_OP_LDAB_Y] = 2,
+    [SCHWASM_OP_STAA_X] = 2,
+    [SCHWASM_OP_STAA_Y] = 2,
+    [SCHWASM_OP_STAB_X] = 2,
+    [SCHWASM_OP_STAB_Y] = 2,
+    [SCHWASM_OP_SUM_BA] = 1,
+    [SCHWASM_OP_SUM_AB] = 1,
+    [SCHWASM_OP_AND_BA] = 1,
+    [SCHWASM_OP_AND_AB] = 1,
+    [SCHWASM_OP_OR_BA] = 1,
+    [SCHWASM_OP_OR_AB] = 1,
+    [SCHWASM_OP_COMA] = 1,
+    [SCHWASM_OP_COMB] = 1,
+    [SCHWASM_OP_SHFA_L] = 1,
+    [SCHWASM_OP_SHFA_R] = 1,
+    [SCHWASM_OP_SHFB_L] = 1,
+    [SCHWASM_OP_SHFB_R] = 1,
+    [SCHWASM_OP_BEQ] = 2,
+    [SCHWASM_OP_BNE] = 2,
+    [SCHWASM_OP_BN] = 2,
+    [SCHWASM_OP_BP] = 2,
+    [SCHWASM_OP_INX] = 1,
+    [SCHWASM_OP_INY] = 1,
+    [SCHWASM_AD_DC] = 1,
+    [SCHWASM_OP_UNKNOWN] = 0,
+};
+
 struct Schwasm_Node {
+    enum Schwasm_Op op;
+    union {
+        uint8_t word;
+        struct {
+            uint8_t lword;
+            uint8_t hword;
+        };
+        uint16_t dword;
+    };
     uint16_t addr;
-    uint8_t code;
 };
 
 int schwasm_node_lesser_cmp(const struct Schwasm_Node lhs, const struct Schwasm_Node rhs) {
@@ -55,15 +147,46 @@ static inline void schwasm_expect_org(struct Schwasm *schwasm) {
     }
 }
 
-static inline void schwasm_create_node(struct Schwasm *schwasm, uint8_t code) {
+static inline void schwasm_create_node(struct Schwasm *schwasm, enum Schwasm_Op op, uint16_t dword) {
     schwasm_expect_org(schwasm);
-    if (sp_bitset_check(&schwasm->used_addrs, schwasm->addr)) {
-        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
-        sp_die(1, SCHWASM_FILE_FMT " Address collision\n", schwasm_file_arg(schwasm->filename, token_line));
+
+    struct Schwasm_Node node = (struct Schwasm_Node) {
+        .op = op,
+        .addr = schwasm->addr,
+    };
+
+    // Address collision check
+    Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
+    uint16_t count = (op == SCHWASM_OP_UNKNOWN) ? dword : SCHWASM_OP_COUNT[op]; // if SCHWASM_OP_UNKNOWN we are doing DS
+    for (uint16_t i = 0; i < count; ++i) {
+        if (sp_bitset_check(&schwasm->used_addrs, schwasm->addr)) {
+            // TODO: make this error msg elaborate on what address it is colliding with
+            sp_die(1, SCHWASM_FILE_FMT " Address collision\n", schwasm_file_arg(schwasm->filename, token_line));
+        }
+
+        sp_bitset_set(&schwasm->used_addrs, schwasm->addr);
+        ++schwasm->addr;
     }
-    sp_heap_push(&schwasm->nodes, ((struct Schwasm_Node) {.addr = schwasm->addr, .code = code}));
-    sp_bitset_set(&schwasm->used_addrs, schwasm->addr);
-    ++schwasm->addr;
+
+    switch (SCHWASM_OP_COUNT[op]) {
+        case 0:
+            node.dword = dword;
+            break;
+        case 1:
+            node.word = (uint8_t) dword;
+            break;
+        case 2:
+            node.word = (uint8_t) dword;
+            break;
+        case 3:
+            node.lword = (uint8_t) dword;
+            node.hword = (uint8_t) (dword >> 8);
+            break;
+        default:
+            sp_unreachable();
+    }
+
+    sp_heap_push(&schwasm->nodes, node);
 }
 
 static inline const Sp_Lexer_Token *schwasm_get_token(struct Schwasm *schwasm) {
@@ -185,18 +308,19 @@ void org(struct Schwasm *schwasm) {
 }
 
 void ld_imm(struct Schwasm *schwasm, enum GCPU_REG reg) {
+    enum Schwasm_Op op;
     switch (reg) {
         case GCPU_REGA:
-            schwasm_create_node(schwasm, 0x02);
+            op = SCHWASM_OP_LDAA_IMM;
             break;
         case GCPU_REGB:
-            schwasm_create_node(schwasm, 0x03);
+            op = SCHWASM_OP_LDAB_IMM;
             break;
         case GCPU_REGX:
-            schwasm_create_node(schwasm, 0x08);
+            op = SCHWASM_OP_LDX_IMM;
             break;
         case GCPU_REGY:
-            schwasm_create_node(schwasm, 0x09);
+            op = SCHWASM_OP_LDY_IMM;
             break;
     }
 
@@ -207,23 +331,24 @@ void ld_imm(struct Schwasm *schwasm, enum GCPU_REG reg) {
         case SCHWASM_VALUE_HEX:
             value = parse_hex_or_die(schwasm, (token = schwasm_get_token(schwasm)));
 
+            // TODO: this would be wrong for LDX and LDY
             if (token->sv.count + token->int_lit.suffixes.count > 2) {
                 Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
                 sp_die(1, SCHWASM_FILE_FMT " Value too large; ROM word size is 8-bit\n", schwasm_file_arg(schwasm->filename, token_line));
-                // sp_die(1, SCHWASM_FILE_FMT " Register does not support loading %d-bit integers\n", schwasm_file_arg(schwasm->filename, token_line), (int) powl(2, token->sv.count + token->int_lit.suffixes.count));
             }
-
-            schwasm_create_node(schwasm, (uint8_t) value);
             break;
         case SCHWASM_VALUE_DECIMAL:
             value = (int) schwasm_get_token(schwasm)->int_lit.value;
+
+            // TODO: this would be wrong for LDX and LDY
             if (value > UINT8_MAX) {
                 Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
                 sp_die(1, SCHWASM_FILE_FMT " Value too large; ROM word size is 8-bit\n", schwasm_file_arg(schwasm->filename, token_line));
             }
-            schwasm_create_node(schwasm, (uint8_t) schwasm_get_token(schwasm)->int_lit.value);
             break;
     }
+
+    schwasm_create_node(schwasm, op, (uint16_t) value);
 }
 
 void ld_reg(struct Schwasm *schwasm) {
@@ -286,12 +411,8 @@ void declare_directive(struct Schwasm *schwasm, enum Declare_Directive directive
                     if (schwasm_get_token(schwasm)->sv.count + schwasm_get_token(schwasm)->int_lit.suffixes.count > 2) {
                         Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
                         sp_die(1, SCHWASM_FILE_FMT " Value too large; ROM word size is 8-bit\n", schwasm_file_arg(schwasm->filename, token_line));
-                        // sp_die(1, SCHWASM_FILE_FMT " ROM address does not support %d-bit integers\n", schwasm_file_arg(schwasm->filename, token_line), (int) powl(2, schwasm_get_token(schwasm)->sv.count + schwasm_get_token(schwasm)->int_lit.suffixes.count));
                     }
-
                     value = parse_hex_or_die(schwasm, schwasm_get_token(schwasm));
-
-                    schwasm_create_node(schwasm, (uint8_t) value);
                     break;
                 case SCHWASM_VALUE_DECIMAL:
                     value = (int) schwasm_get_token(schwasm)->int_lit.value;
@@ -299,9 +420,9 @@ void declare_directive(struct Schwasm *schwasm, enum Declare_Directive directive
                         Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
                         sp_die(1, SCHWASM_FILE_FMT " Value too large; ROM word size is 8-bit\n", schwasm_file_arg(schwasm->filename, token_line));
                     }
-                    schwasm_create_node(schwasm, (uint8_t) schwasm_get_token(schwasm)->int_lit.value);
                     break;
             }
+            schwasm_create_node(schwasm, SCHWASM_AD_DC, (uint16_t) value);
 
             const Sp_Lexer_Token *next = schwasm_peek_token(schwasm);
             Sp_Lexer_Token_Line next_line = splexer_token_get_line(&schwasm->lexer, next);
@@ -315,21 +436,13 @@ void declare_directive(struct Schwasm *schwasm, enum Declare_Directive directive
                 case SCHWASM_VALUE_HEX:
                     value = parse_hex_or_die(schwasm, schwasm_get_token(schwasm));
 
-                    // TODO: turn this into a span definition instead of spamming memory segment definitions
-                    for (int i = 0; i < value; ++i) {
-                        schwasm_create_node(schwasm, 0x00);
-                    }
                     break;
                 case SCHWASM_VALUE_DECIMAL:
-                    // TODO: check if out of range
                     value = (int) schwasm_get_token(schwasm)->int_lit.value;
-
-                    // TODO: turn this into a span definition instead of spamming memory segment definitions
-                    for (int i = 0; i < value; ++i) {
-                        schwasm_create_node(schwasm, 0x00);
-                    }
                     break;
             }
+            // TODO: need a bound on value
+            schwasm_create_node(schwasm, SCHWASM_OP_UNKNOWN, (uint16_t) value);
             break;
     }
 }
@@ -358,7 +471,8 @@ int main(int argc, char **argv) {
     }
 
     Sp_Lexer_Return_Code code;
-    while ((code = splexer_tokenize(&schwasm.lexer)) == SPLEXER_OK);
+    while ((code = splexer_tokenize(&schwasm.lexer)) == SPLEXER_OK)
+        ;
 
     if (code == SPLEXER_ERROR) {
         if (schwasm.lexer.state == SPLEXER_STATE_MULTICOMMENT) {
@@ -375,7 +489,7 @@ int main(int argc, char **argv) {
     sp_sb_appendf(&generated, "ADDRESS_RADIX = HEX;\n");
     sp_sb_appendf(&generated, "DATA_RADIX = HEX;\n\n");
 
-    sp_sb_appendf(&generated, "CONTENT\nBEGIN\n");
+    sp_sb_appendf(&generated, "CONTENT\nBEGIN\n\n");
 
     const Sp_Lexer_Token *prev = NULL;
     const Sp_Lexer_Token *token = schwasm_get_token(&schwasm);
@@ -410,41 +524,41 @@ int main(int argc, char **argv) {
         if (sp_sv_eq(&sp_cstr_slice("ORG"), &token->sv)) {
             org(&schwasm);
         } else if (sp_sv_eq(&sp_cstr_slice("TAB"), &token->sv)) {
-            schwasm_create_node(&schwasm, 0x00);
+            schwasm_create_node(&schwasm, SCHWASM_OP_TAB, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("TBA"), &token->sv)) {
-            schwasm_create_node(&schwasm, 0x01);
+            schwasm_create_node(&schwasm, SCHWASM_OP_TBA, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("LDAA"), &token->sv)) {
             ld(&schwasm, GCPU_REGA);
         } else if (sp_sv_eq(&sp_cstr_slice("LDAB"), &token->sv)) {
             ld(&schwasm, GCPU_REGB);
         } else if (sp_sv_eq(&sp_cstr_slice("SUM_BA"), &token->sv)) {
-            schwasm_create_node(&schwasm, 0x14);
+            schwasm_create_node(&schwasm, SCHWASM_OP_SUM_BA, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("SUM_AB"), &token->sv)) {
-            schwasm_create_node(&schwasm, 0x15);
+            schwasm_create_node(&schwasm, SCHWASM_OP_SUM_AB, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("AND_BA"), &token->sv)) {
-            schwasm_create_node(&schwasm, 0x16);
+            schwasm_create_node(&schwasm, SCHWASM_OP_AND_BA, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("AND_AB"), &token->sv)) {
-            schwasm_create_node(&schwasm, 0x17);
+            schwasm_create_node(&schwasm, SCHWASM_OP_AND_AB, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("OR_BA"), &token->sv)) {
-            schwasm_create_node(&schwasm, 0x18);
+            schwasm_create_node(&schwasm, SCHWASM_OP_OR_BA, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("OR_AB"), &token->sv)) {
-            schwasm_create_node(&schwasm, 0x19);
+            schwasm_create_node(&schwasm, SCHWASM_OP_OR_AB, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("COMA"), &token->sv)) {
-            schwasm_create_node(&schwasm, 0x1A);
+            schwasm_create_node(&schwasm, SCHWASM_OP_COMA, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("COMB"), &token->sv)) {
-            schwasm_create_node(&schwasm, 0x1B);
+            schwasm_create_node(&schwasm, SCHWASM_OP_COMB, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("SHFA_L"), &token->sv)) {
-            schwasm_create_node(&schwasm, 0x1C);
+            schwasm_create_node(&schwasm, SCHWASM_OP_SHFA_L, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("SHFA_R"), &token->sv)) {
-            schwasm_create_node(&schwasm, 0x1D);
+            schwasm_create_node(&schwasm, SCHWASM_OP_SHFA_R, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("SHFB_L"), &token->sv)) {
-            schwasm_create_node(&schwasm, 0x1E);
+            schwasm_create_node(&schwasm, SCHWASM_OP_SHFB_L, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("SHFB_R"), &token->sv)) {
-            schwasm_create_node(&schwasm, 0x1F);
+            schwasm_create_node(&schwasm, SCHWASM_OP_SHFB_R, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("INX"), &token->sv)) {
-            schwasm_create_node(&schwasm, 0x30);
+            schwasm_create_node(&schwasm, SCHWASM_OP_INX, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("INY"), &token->sv)) {
-            schwasm_create_node(&schwasm, 0x31);
+            schwasm_create_node(&schwasm, SCHWASM_OP_INY, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("DC"), &token->sv)) {
             declare_directive(&schwasm, DC_B);
         } else if (sp_sv_eq(&sp_cstr_slice("DS"), &token->sv)) {
@@ -465,11 +579,36 @@ int main(int argc, char **argv) {
 
         // "calloc" unspecified memory regions
         if (node.addr > next_addr) {
-            sp_sb_appendf(&generated, "[%04X..%04X]\t:\t%02X;\n", next_addr, node.addr - 1, 0x00);
+            sp_sb_appendf(&generated, "[%04X..%04X]\t:\t%02X;\n\n", next_addr, node.addr - 1, 0x00);
         }
-        next_addr = node.addr + 1;
 
-        sp_sb_appendf(&generated, "%04X\t\t:\t%02X;\n", node.addr, node.code);
+        next_addr = node.addr + SCHWASM_OP_COUNT[node.op];
+
+        switch (SCHWASM_OP_COUNT[node.op]) {
+            case 0:
+                sp_sb_appendf(&generated, "[%04X..%04X]\t:\t%02X;\n\n", node.addr, node.addr + node.dword - 1, 0x00); // allocate node.dword bytes
+                next_addr = node.addr + node.dword;
+                break;
+            case 1:
+                if (node.op == SCHWASM_AD_DC) {
+                    sp_sb_appendf(&generated, "%04X\t\t:\t%02X;\n\n", node.addr, node.word);
+                } else {
+                    sp_sb_appendf(&generated, "%04X\t\t:\t%02X;\n\n", node.addr, node.op);
+                }
+                break;
+            case 2:
+                sp_sb_appendf(&generated, "%04X\t\t:\t%02X;\n", node.addr, node.op);
+                sp_sb_appendf(&generated, "%04X\t\t:\t%02X;\n\n", node.addr + 1, node.word);
+                break;
+            case 3:
+                sp_sb_appendf(&generated, "%04X\t\t:\t%02X;\n", node.addr, node.op);
+                sp_sb_appendf(&generated, "%04X\t\t:\t%02X;\n", node.addr + 1, node.lword);
+                sp_sb_appendf(&generated, "%04X\t\t:\t%02X;\n\n", node.addr + 2, node.hword);
+                break;
+            default:
+                sp_unreachable();
+        }
+        
 
         sp_heap_pop(&schwasm.nodes);
     }
