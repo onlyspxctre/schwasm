@@ -507,7 +507,7 @@ void declare_directive(struct Schwasm *schwasm, enum Declare_Directive directive
     Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
 
     if (!token || prev_line.line != token_line.line || token->type != TOK_Period) {
-        sp_die(1, SCHWASM_FILE_FMT " Failed to parse assembly directive \"" SP_SV_FMT "\"", schwasm_file_arg(schwasm->filename, prev_line), sp_sv_arg(prev->sv));
+        sp_die(1, SCHWASM_FILE_FMT " Failed to parse assembly directive \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm->filename, prev_line), sp_sv_arg(prev->sv));
     }
 
     prev = token;
@@ -516,7 +516,7 @@ void declare_directive(struct Schwasm *schwasm, enum Declare_Directive directive
     token_line = splexer_token_get_line(&schwasm->lexer, token);
 
     if (!token || prev_line.line != token_line.line || !sp_sv_eq(&sp_cstr_slice("B"), &token->sv)) {
-        sp_die(1, SCHWASM_FILE_FMT " Failed to parse assembly directive", schwasm_file_arg(schwasm->filename, prev_line));
+        sp_die(1, SCHWASM_FILE_FMT " Failed to parse assembly directive\n", schwasm_file_arg(schwasm->filename, prev_line));
     }
 
     int value;
@@ -567,24 +567,56 @@ void declare_directive(struct Schwasm *schwasm, enum Declare_Directive directive
 static Sp_String_Builder generated = {0};
 static struct Schwasm schwasm = {0};
 
+static const char *input_path = NULL;
+static Sp_String_Builder output_path = {0};
+enum Output_Mode {
+    OUTPUT_NIL,
+    OUTPUT_FILE,
+    OUTPUT_PRINT
+};
+static enum Output_Mode output_mode = OUTPUT_NIL;
+
 void cleanup() {
     sp_da_free(&generated);
+    sp_da_free(&output_path);
     schwasm_destroy(&schwasm);
 }
 
 int main(int argc, char **argv) {
     if (argc == 1) {
-        sp_die(1, "Not enough arguments (expected a filename)\n");
+        sp_die(1, "Usage: `schwasm file.asm`\n");
     }
-    if (argc > 2) {
-        sp_die(1, "Too many arguments (expected 1, got %d)\n", argc - 1);
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "-D") == 0) {
+            if (i + 1 >= argc) {
+                sp_die(1, "-D: expected a path\n");
+            }
+            if (output_mode == OUTPUT_PRINT) {
+                sp_die(1, "-D: flag conflicts with -p\n");
+            }
+
+            output_mode = OUTPUT_FILE;
+            sp_sb_appendf(&output_path, "%s", argv[++i]);
+        } else if (strcmp(argv[i], "-p") == 0) {
+            if (output_mode == OUTPUT_FILE) {
+                sp_die(1, "-p: flag conflicts with -D\n");
+            }
+
+            output_mode = OUTPUT_PRINT;
+        } else {
+            if (input_path) {
+                sp_die(1, "Unknown trailing argument \"%s\"\n", argv[i]);
+            }
+
+            input_path = argv[i];
+        }
     }
 
-    schwasm = schwasm_init(argv[1]);
+    schwasm = schwasm_init(input_path);
     atexit(cleanup);
 
-    if (splexer_init(&schwasm.lexer, argv[1]) != 0) {
-        sp_die(1, "Unable to open file: \"%s\"\n", argv[1]);
+    if (splexer_init(&schwasm.lexer, input_path) != 0) {
+        sp_die(1, "Unable to open file: \"%s\": %s\n", input_path, strerror(errno));
     }
 
     Sp_Lexer_Return_Code code;
@@ -752,6 +784,26 @@ int main(int argc, char **argv) {
     }
 
     sp_sb_appendf(&generated, "END;\n");
-    printf("%s", generated.data);
+
+    FILE *output;
+    switch (output_mode) {
+        case OUTPUT_NIL:
+            sp_sb_appendf(&output_path, ".");
+        case OUTPUT_FILE:
+            sp_sb_appendf(&output_path, "/rom.mif");
+            output = fopen(output_path.data, "w");
+
+            if (!output) {
+                sp_die(1, "Unable to write to file \"%s\": %s\n", output_path.data, strerror(errno));
+            }
+
+            fwrite(generated.data, sizeof(char), generated.count, output);
+            fclose(output);
+            break;
+        case OUTPUT_PRINT:
+            printf("%s", generated.data);
+            break;
+    }
+
     return 0;
 }
