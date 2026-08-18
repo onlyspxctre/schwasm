@@ -1,35 +1,16 @@
 .PHONY: all clean
 
+BUILDDIR := $(abspath ./build)
+DEPSDIR := $(abspath ./deps)
+INCLUDEDIR := $(abspath ./include)
+LIBDIR := $(abspath ./lib)
 
-export BUILDDIR := $(abspath ./build)
-export DEPSDIR := $(abspath ./deps)
-export INCLUDEDIR := $(abspath ./include)
-export LIBDIR := $(abspath ./lib)
+CC := clang
+CFLAGS := -Wall -Wextra -std=c11 -fcolor-diagnostics -I$(INCLUDEDIR)
+LDFLAGS := -fuse-ld=lld
 
-SPLEXER_VERSION := 58103af
+SPLEXER_VERSION := d8bab4d
 SPLEXER_FLAGS := GRANULAR_TOK_UNKNOWN=y NO_MULTICOMMENT=y
-
-
-ifneq ($(WINDOWS),)
-export CC := x86_64-w64-mingw32-gcc
-export CFLAGS := -Wall -Wextra -std=c11 -I$(INCLUDEDIR)
-export LIBS := -l:libsplexer.dll
-
-all: $(BUILDDIR)/schwasm.exe
-
-$(BUILDDIR)/schwasm.exe: schwasm.c $(LIBDIR)/libsplexer.dll $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
-	mkdir -p $(BUILDDIR)
-	$(CC) $(CFLAGS) -ggdb -o $@ $< -L$(LIBDIR) $(LIBS)
-
-$(LIBDIR)/libsplexer.dll: $(BUILDDIR)/splexer
-	mkdir -p $(LIBDIR)
-	$(MAKE) -C $(BUILDDIR)/splexer WINDOWS=y main.exe
-	cp -f $(BUILDDIR)/splexer/build/libsplexer.dll $@
-
-else
-export CC := clang
-export CFLAGS := -Wall -Wextra -std=c11 -fcolor-diagnostics -I$(INCLUDEDIR)
-export LIBS := -lsplexer
 
 ifneq ($(RELEASE),)
 CFLAGS += -O2 -static
@@ -38,11 +19,32 @@ else
 CFLAGS += -g
 endif
 
+ifneq ($(WINDOWS),)
+CC +=  --target=x86_64-w64-mingw32 --sysroot=/usr/x86_64-w64-mingw32
+LDFLAGS += -L/usr/lib/gcc/x86_64-w64-mingw32/16.1.0 -DSP_STATIC
+LIBS := -l:libsplexer-win.a
+SPLEXER_FLAGS += WINDOWS=y
+
+all: $(BUILDDIR)/schwasm.exe
+
+$(BUILDDIR)/schwasm.exe: schwasm.c $(LIBDIR)/libsplexer-win.a $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
+	mkdir -p $(BUILDDIR)
+	$(CC) $(CFLAGS) $(LDFLAGS) -ggdb -o $@ $< -L$(LIBDIR) $(LIBS)
+
+$(LIBDIR)/libsplexer-win.a: $(DEPSDIR)/splexer
+	mkdir -p $(LIBDIR)
+	$(MAKE) -C $(DEPSDIR)/splexer $(SPLEXER_FLAGS) all
+	cp -f $(DEPSDIR)/splexer/build/libsplexer-win.a $@
+
+else
+
+LIBS := -lsplexer
+
 all: $(BUILDDIR)/schwasm
 
 $(BUILDDIR)/schwasm: schwasm.c $(LIBDIR)/libsplexer.so $(LIBDIR)/libsplexer.a $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
 	mkdir -p $(BUILDDIR)
-	$(CC) $(CFLAGS) -o $@ $< -L$(LIBDIR) $(LIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $< -L$(LIBDIR) $(LIBS)
 
 $(LIBDIR)/libsplexer.a: $(DEPSDIR)/splexer
 	mkdir -p $(LIBDIR)

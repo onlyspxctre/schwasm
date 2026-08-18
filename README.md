@@ -1,6 +1,6 @@
 # schwasm — GCPU Assembler
 
-A lightweight assembler for **G-CPU**, targeting a 4K×8 ROM with a 12-bit address bus, outputting a `.mif` file. This is heavily based on the example assembler built for a simple RALU shown in `splexer` example source code. Currently supports Linux, with Windows and MacOS support slated for future release.
+A lightweight assembler for **G-CPU**, targeting a 4K×8 ROM with a 12-bit address bus, outputting a `.mif` file. This is heavily based on the example assembler built for a simple RALU shown in `splexer` example source code. Currently supports Linux and Windows (macOS is untested).
 
 Schwasm is designed according to the [**G-CPU Specification**](https://mil.ufl.edu/3701/labs/gcpu/G-CPU_Complete_Docs_5Apr2024.pdf), and strives for functional parity with the official, proprietary **G-CPU IDE**.
 
@@ -22,6 +22,12 @@ make
 To build an optimized, statically linked release binary, run:
 ```bash
 make RELEASE=y
+```
+
+To target Windows, run:
+
+```bash
+make WINDOWS=y
 ```
 
 ## Usage
