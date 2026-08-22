@@ -314,8 +314,9 @@ void ld(struct Schwasm *schwasm, enum GCPU_REG reg) {
     const Sp_Lexer_Token *token = schwasm_get_token(schwasm);
     const Sp_Lexer_Token *next =  schwasm_peek_token(schwasm);
 
-    if (!next) {
-        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+    Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+    Sp_Lexer_Token_Line next_line = splexer_token_get_line(&schwasm->lexer, next);
+    if (!next || token_line.line != next_line.line) {
         sp_die(1, SCHWASM_FILE_FMT " Expected rhs\n", schwasm_file_arg(schwasm->filename, token_line));
     }
 
@@ -347,8 +348,7 @@ void ld(struct Schwasm *schwasm, enum GCPU_REG reg) {
                 value = (token = schwasm_get_token(schwasm))->int_lit.value;
                 break;
         }
-
-        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+        token_line = splexer_token_get_line(&schwasm->lexer, token);
 
         switch (reg) {
             case GCPU_REGA:
@@ -367,8 +367,6 @@ void ld(struct Schwasm *schwasm, enum GCPU_REG reg) {
 
         schwasm_create_node(schwasm, op, (uint16_t) value);
     } else { // extended addressing
-        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
-
         switch (reg) {
             case GCPU_REGA:
                 op = SCHWASM_OP_LDAA;
@@ -393,11 +391,57 @@ void ld(struct Schwasm *schwasm, enum GCPU_REG reg) {
                 break;
         }
 
-        if (value >= ROM_SIZE) {
-            sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), value);
-        }
+        next = schwasm_peek_token(schwasm);
+        next_line = splexer_token_get_line(&schwasm->lexer, next);
 
-        schwasm_create_node(schwasm, op, (uint16_t) value);
+        if (next && next->type == TOK_Comma && token_line.line == next_line.line) {
+            schwasm_next_token(schwasm);
+
+            next = schwasm_next_token(schwasm);
+            next_line = splexer_token_get_line(&schwasm->lexer, next);
+            if (!next || next->type != TOK_ID || next_line.line != token_line.line) {
+                sp_die(1, SCHWASM_FILE_FMT " Expected address register for indexed addressing\n", schwasm_file_arg(schwasm->filename, next_line));
+            }
+
+            if (sp_sv_eq(&next->sv, &sp_cstr_slice("X"))) {
+                switch (reg) {
+                    case GCPU_REGA:
+                        op = SCHWASM_OP_LDAA_X;
+                        break;
+                    case GCPU_REGB:
+                        op = SCHWASM_OP_LDAB_X;
+                        break;
+                    default:
+                        sp_unreachable();
+                }
+            } else if (sp_sv_eq(&next->sv, &sp_cstr_slice("Y"))) {
+                switch (reg) {
+                    case GCPU_REGA:
+                        op = SCHWASM_OP_LDAA_Y;
+                        break;
+                    case GCPU_REGB:
+                        op = SCHWASM_OP_LDAB_Y;
+                        break;
+                    default:
+                        sp_unreachable();
+                }
+            } else {
+                sp_die(1, SCHWASM_FILE_FMT " Unexpected address register \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm->filename, next_line), sp_sv_arg(next->sv));
+            }
+
+            if (value > UINT8_MAX) {
+                sp_die(1, SCHWASM_FILE_FMT " Value too large; 8-bit displacement expected", schwasm_file_arg(schwasm->filename, token_line));
+            }
+
+            schwasm_create_node(schwasm, op, (uint16_t) value);
+
+        } else {
+            if (value >= ROM_SIZE) {
+                sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), value);
+            }
+
+            schwasm_create_node(schwasm, op, (uint16_t) value);
+        }
     }
 }
 
@@ -407,8 +451,9 @@ void st(struct Schwasm *schwasm, enum GCPU_REG reg) {
     const Sp_Lexer_Token *token = schwasm_get_token(schwasm);
     const Sp_Lexer_Token *next =  schwasm_peek_token(schwasm);
 
-    if (!next) {
-        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+    Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+    Sp_Lexer_Token_Line next_line = splexer_token_get_line(&schwasm->lexer, next);
+    if (!next || token_line.line != next_line.line) {
         sp_die(1, SCHWASM_FILE_FMT " Expected rhs\n", schwasm_file_arg(schwasm->filename, token_line));
     }
 
@@ -416,7 +461,6 @@ void st(struct Schwasm *schwasm, enum GCPU_REG reg) {
     long addr;
 
     if (next->type == TOK_Pound) {
-        Sp_Lexer_Token_Line next_line = splexer_token_get_line(&schwasm->lexer, next);
         sp_die(1, SCHWASM_FILE_FMT " Unexpected immediate value; store operations cannot be performed onto immediate value\n", schwasm_file_arg(schwasm->filename, next_line));
     } else {
         switch (reg) {
@@ -442,7 +486,7 @@ void st(struct Schwasm *schwasm, enum GCPU_REG reg) {
         }
 
         if (addr >= ROM_SIZE) {
-            Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+            token_line = splexer_token_get_line(&schwasm->lexer, token);
             sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), addr);
         }
 
@@ -466,14 +510,14 @@ void branch(struct Schwasm *schwasm, enum Schwasm_Op op) {
     const Sp_Lexer_Token *token = schwasm_get_token(schwasm);
     const Sp_Lexer_Token *next =  schwasm_peek_token(schwasm);
 
-    if (!next) {
-        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+    Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+    Sp_Lexer_Token_Line next_line = splexer_token_get_line(&schwasm->lexer, next);
+    if (!next || token_line.line != next_line.line) {
         sp_die(1, SCHWASM_FILE_FMT " Expected rhs\n", schwasm_file_arg(schwasm->filename, token_line));
     }
 
     long addr;
     if (next->type == TOK_Pound) {
-        Sp_Lexer_Token_Line next_line = splexer_token_get_line(&schwasm->lexer, next);
         sp_die(1, SCHWASM_FILE_FMT " Unexpected immediate value; branch operations require lower-order byte of addr\n", schwasm_file_arg(schwasm->filename, next_line));
     } else {
         switch (schwasm_expect_value(schwasm)) {
@@ -486,7 +530,6 @@ void branch(struct Schwasm *schwasm, enum Schwasm_Op op) {
         }
 
         if (addr > UINT8_MAX) {
-            Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
             sp_die(1, SCHWASM_FILE_FMT " Cannot branch to (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), addr);
         }
 
