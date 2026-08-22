@@ -288,7 +288,7 @@ void org(struct Schwasm *schwasm) {
 
             if (token->sv.count + token->int_lit.suffixes.count > 4) { // exceeds 4 hex digits
                 Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
-                sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%lX) \n", schwasm_file_arg(schwasm->filename, token_line), value);
+                sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%lX)\n", schwasm_file_arg(schwasm->filename, token_line), value);
             }
 
             schwasm->addr = (uint16_t) value;
@@ -297,7 +297,7 @@ void org(struct Schwasm *schwasm) {
             value = (token = schwasm_get_token(schwasm))->int_lit.value;
             if (value > UINT16_MAX) {
                 Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
-                sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (%ld) \n", schwasm_file_arg(schwasm->filename, token_line), value);
+                sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (%ld)\n", schwasm_file_arg(schwasm->filename, token_line), value);
             }
 
             schwasm->addr = (uint16_t) value;
@@ -594,9 +594,6 @@ void cleanup() {
 }
 
 int main(int argc, char **argv) {
-    if (argc == 1) {
-        sp_die(1, "Usage: `schwasm file.asm`\n");
-    }
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "-D") == 0) {
             if (i + 1 >= argc) {
@@ -605,8 +602,8 @@ int main(int argc, char **argv) {
             if (output_mode == OUTPUT_PRINT) {
                 sp_die(1, "-D: flag conflicts with -p\n");
             }
-
             output_mode = OUTPUT_FILE;
+            sp_da_clear(&output_path);
             sp_sb_appendf(&output_path, "%s", argv[++i]);
         } else if (strcmp(argv[i], "-p") == 0) {
             if (output_mode == OUTPUT_FILE) {
@@ -621,6 +618,10 @@ int main(int argc, char **argv) {
 
             input_path = argv[i];
         }
+    }
+
+    if (!input_path) {
+        sp_die(1, "Usage: `schwasm file.asm`\n");
     }
 
     schwasm = schwasm_init(input_path);
@@ -808,8 +809,16 @@ int main(int argc, char **argv) {
                 sp_die(1, "Unable to write to file \"%s\": %s\n", output_path.data, strerror(errno));
             }
 
-            fwrite(generated.data, sizeof(char), generated.count, output);
-            fclose(output);
+            errno = 0;
+            if (generated.count > fwrite(generated.data, sizeof(char), generated.count, output)) {
+                fclose(output);
+                sp_die(1, "fwrite(): %s", strerror(errno));
+            }
+
+            errno = 0;
+            if (fclose(output) != 0) {
+                sp_die(1, "fclose(): %s", strerror(errno));
+            }
             break;
         case OUTPUT_PRINT:
             printf("%s", generated.data);
