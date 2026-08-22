@@ -159,6 +159,9 @@ static inline void schwasm_create_node(struct Schwasm *schwasm, enum Schwasm_Op 
     Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
     uint16_t count = (op == SCHWASM_OP_UNKNOWN) ? dword : SCHWASM_OP_COUNT[op]; // if SCHWASM_OP_UNKNOWN we are doing DS
     for (uint16_t i = 0; i < count; ++i) {
+        if (schwasm->addr >= ROM_SIZE) {
+            sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04X)\n", schwasm_file_arg(schwasm->filename, token_line), schwasm->addr);
+        }
         if (sp_bitset_check(&schwasm->used_addrs, schwasm->addr)) {
             // TODO: make this error msg elaborate on what address it is colliding with
             sp_die(1, SCHWASM_FILE_FMT " Address collision\n", schwasm_file_arg(schwasm->filename, token_line));
@@ -256,10 +259,10 @@ static inline void schwasm_destroy(struct Schwasm *schwasm) {
     sp_heap_free(&schwasm->nodes);
 }
 
-static inline int parse_hex_or_die(struct Schwasm *schwasm, const Sp_Lexer_Token *token) {
+static inline long parse_hex_or_die(struct Schwasm *schwasm, const Sp_Lexer_Token *token) {
     errno = 0;
     char *endptr;
-    int value = (int) strtol(token->sv.ptr, &endptr, 16);
+    long value = strtol(token->sv.ptr, &endptr, 16);
 
     if (errno != 0 || endptr - token->sv.ptr < (long) (token->sv.count + token->int_lit.suffixes.count)) {
         Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
@@ -277,7 +280,7 @@ enum GCPU_REG {
 };
 
 void org(struct Schwasm *schwasm) {
-    int value;
+    long value;
     const Sp_Lexer_Token *token;
     switch (schwasm_expect_value(schwasm)) {
         case SCHWASM_VALUE_HEX:
@@ -285,16 +288,16 @@ void org(struct Schwasm *schwasm) {
 
             if (token->sv.count + token->int_lit.suffixes.count > 4) { // exceeds 4 hex digits
                 Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
-                sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%X) \n", schwasm_file_arg(schwasm->filename, token_line), value);
+                sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%lX) \n", schwasm_file_arg(schwasm->filename, token_line), value);
             }
 
             schwasm->addr = (uint16_t) value;
             break;
         case SCHWASM_VALUE_DECIMAL:
-            value = (int) (token = schwasm_get_token(schwasm))->int_lit.value;
+            value = (token = schwasm_get_token(schwasm))->int_lit.value;
             if (value > UINT16_MAX) {
                 Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
-                sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (%d) \n", schwasm_file_arg(schwasm->filename, token_line), value);
+                sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (%ld) \n", schwasm_file_arg(schwasm->filename, token_line), value);
             }
 
             schwasm->addr = (uint16_t) value;
@@ -317,7 +320,7 @@ void ld(struct Schwasm *schwasm, enum GCPU_REG reg) {
     }
 
     enum Schwasm_Op op;
-    int value;
+    long value;
     if (next->type == TOK_Pound) { // immediate addressing
         schwasm_next_token(schwasm); // consume the TOK_Pound
 
@@ -341,7 +344,7 @@ void ld(struct Schwasm *schwasm, enum GCPU_REG reg) {
                 value = parse_hex_or_die(schwasm, (token = schwasm_get_token(schwasm)));
                 break;
             case SCHWASM_VALUE_DECIMAL:
-                value = (int) (token = schwasm_get_token(schwasm))->int_lit.value;
+                value = (token = schwasm_get_token(schwasm))->int_lit.value;
                 break;
         }
 
@@ -364,6 +367,8 @@ void ld(struct Schwasm *schwasm, enum GCPU_REG reg) {
 
         schwasm_create_node(schwasm, op, (uint16_t) value);
     } else { // extended addressing
+        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+
         switch (reg) {
             case GCPU_REGA:
                 op = SCHWASM_OP_LDAA;
@@ -384,13 +389,12 @@ void ld(struct Schwasm *schwasm, enum GCPU_REG reg) {
                 value = parse_hex_or_die(schwasm, (token = schwasm_get_token(schwasm)));
                 break;
             case SCHWASM_VALUE_DECIMAL:
-                value = (int) (token = schwasm_get_token(schwasm))->int_lit.value;
+                value = (token = schwasm_get_token(schwasm))->int_lit.value;
                 break;
         }
 
         if (value >= ROM_SIZE) {
-            Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
-            sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04X)\n", schwasm_file_arg(schwasm->filename, token_line), value);
+            sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), value);
         }
 
         schwasm_create_node(schwasm, op, (uint16_t) value);
@@ -409,7 +413,7 @@ void st(struct Schwasm *schwasm, enum GCPU_REG reg) {
     }
 
     enum Schwasm_Op op;
-    int addr;
+    long addr;
 
     if (next->type == TOK_Pound) {
         Sp_Lexer_Token_Line next_line = splexer_token_get_line(&schwasm->lexer, next);
@@ -433,13 +437,13 @@ void st(struct Schwasm *schwasm, enum GCPU_REG reg) {
                 addr = parse_hex_or_die(schwasm, (token = schwasm_get_token(schwasm)));
                 break;
             case SCHWASM_VALUE_DECIMAL:
-                addr = (int) (token = schwasm_get_token(schwasm))->int_lit.value;
+                addr = (token = schwasm_get_token(schwasm))->int_lit.value;
                 break;
         }
 
         if (addr >= ROM_SIZE) {
             Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
-            sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04X)\n", schwasm_file_arg(schwasm->filename, token_line), addr);
+            sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), addr);
         }
 
         schwasm_create_node(schwasm, op, (uint16_t) addr);
@@ -467,7 +471,7 @@ void branch(struct Schwasm *schwasm, enum Schwasm_Op op) {
         sp_die(1, SCHWASM_FILE_FMT " Expected rhs\n", schwasm_file_arg(schwasm->filename, token_line));
     }
 
-    int addr;
+    long addr;
     if (next->type == TOK_Pound) {
         Sp_Lexer_Token_Line next_line = splexer_token_get_line(&schwasm->lexer, next);
         sp_die(1, SCHWASM_FILE_FMT " Unexpected immediate value; branch operations require lower-order byte of addr\n", schwasm_file_arg(schwasm->filename, next_line));
@@ -477,13 +481,13 @@ void branch(struct Schwasm *schwasm, enum Schwasm_Op op) {
                 addr = parse_hex_or_die(schwasm, (token = schwasm_get_token(schwasm)));
                 break;
             case SCHWASM_VALUE_DECIMAL:
-                addr = (int) (token = schwasm_get_token(schwasm))->int_lit.value;
+                addr = (token = schwasm_get_token(schwasm))->int_lit.value;
                 break;
         }
 
-        if (addr >= UINT8_MAX) {
+        if (addr > UINT8_MAX) {
             Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
-            sp_die(1, SCHWASM_FILE_FMT " Cannot branch to (0x%04X)\n", schwasm_file_arg(schwasm->filename, token_line), addr);
+            sp_die(1, SCHWASM_FILE_FMT " Cannot branch to (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), addr);
         }
 
         schwasm_create_node(schwasm, op, (uint16_t) addr);
@@ -519,22 +523,22 @@ void declare_directive(struct Schwasm *schwasm, enum Declare_Directive directive
         sp_die(1, SCHWASM_FILE_FMT " Failed to parse assembly directive\n", schwasm_file_arg(schwasm->filename, prev_line));
     }
 
-    int value;
+    long value;
     switch (directive) {
         case DC_B:
         dc_loop:
             switch (schwasm_expect_value(schwasm)) {
                 case SCHWASM_VALUE_HEX:
                     if (schwasm_get_token(schwasm)->sv.count + schwasm_get_token(schwasm)->int_lit.suffixes.count > 2) {
-                        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
+                        token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
                         sp_die(1, SCHWASM_FILE_FMT " Value too large; ROM word size is 8-bit\n", schwasm_file_arg(schwasm->filename, token_line));
                     }
                     value = parse_hex_or_die(schwasm, schwasm_get_token(schwasm));
                     break;
                 case SCHWASM_VALUE_DECIMAL:
-                    value = (int) schwasm_get_token(schwasm)->int_lit.value;
+                    value = schwasm_get_token(schwasm)->int_lit.value;
                     if (value > UINT8_MAX) {
-                        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
+                        token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
                         sp_die(1, SCHWASM_FILE_FMT " Value too large; ROM word size is 8-bit\n", schwasm_file_arg(schwasm->filename, token_line));
                     }
                     break;
@@ -555,10 +559,17 @@ void declare_directive(struct Schwasm *schwasm, enum Declare_Directive directive
 
                     break;
                 case SCHWASM_VALUE_DECIMAL:
-                    value = (int) schwasm_get_token(schwasm)->int_lit.value;
+                    value = schwasm_get_token(schwasm)->int_lit.value;
                     break;
             }
-            // TODO: need a bound on value
+            if (value > (long) ROM_SIZE - schwasm->addr) {
+                token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
+                sp_die(1, SCHWASM_FILE_FMT " Store address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), schwasm->addr + value);
+            }
+            if (value <= 0) {
+                token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
+                sp_die(1, SCHWASM_FILE_FMT " Cannot store 0 bytes\n", schwasm_file_arg(schwasm->filename, token_line));
+            }
             schwasm_create_node(schwasm, SCHWASM_OP_UNKNOWN, (uint16_t) value);
             break;
     }
