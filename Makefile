@@ -11,12 +11,13 @@ CC := clang
 CFLAGS := -Wall -Wextra -Wshadow -std=c11 -fcolor-diagnostics -I$(INCLUDEDIR)
 LDFLAGS := -fuse-ld=lld
 
-SPLEXER_VERSION := d8bab4d
+SPLEXER_VERSION := 1aeb2f8
 SPLEXER_FLAGS := GRANULAR_TOK_UNKNOWN=y NO_MULTICOMMENT=y
 SPLEXER_STAMP := $(DEPSDIR)/.splexer-$(SPLEXER_VERSION).stamp
 
 ifneq ($(RELEASE),)
 CFLAGS += -O2 -flto -static
+SPLEXER_FLAGS += RELEASE=y
 BUILDDIR := $(abspath ./build/release)
 else
 CFLAGS += -g
@@ -32,7 +33,7 @@ SPLEXER_FLAGS += WINDOWS=y
 
 all: $(BUILDDIR)/schwasm.exe
 
-$(BUILDDIR)/schwasm.exe: $(OBJDIR)/schwasm.o $(LIBDIR)/libsplexer-win.a $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
+$(BUILDDIR)/schwasm.exe: $(OBJDIR)/schwasm.o $(SRCDIR)/schwasm.c $(SRCDIR)/schwasm.h $(LIBDIR)/libsplexer-win.a $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
 	mkdir -p $(BUILDDIR)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(SRCDIR)/cli.c $< -L$(LIBDIR) $(LIBS)
 
@@ -51,7 +52,7 @@ LIBS := -lsplexer
 
 all: $(BUILDDIR)/schwasm
 
-$(BUILDDIR)/schwasm: $(OBJDIR)/schwasm.o $(LIBDIR)/libsplexer.so $(LIBDIR)/libsplexer.a $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
+$(BUILDDIR)/schwasm: $(OBJDIR)/schwasm.o $(SRCDIR)/schwasm.c $(SRCDIR)/schwasm.h $(LIBDIR)/libsplexer.so $(LIBDIR)/libsplexer.a $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
 	mkdir -p $(BUILDDIR)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(SRCDIR)/cli.c $< -L$(LIBDIR) $(LIBS)
 
