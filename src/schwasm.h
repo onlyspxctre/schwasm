@@ -3,7 +3,7 @@
 
 #define ROM_SIZE 4096
 
-#define SCHWASM_FILE_FMT "%s:%ld:%ld:"
+#define SCHWASM_FILE_FMT "%s:%zu:%zu:"
 #define schwasm_file_arg(name, tok_line) name, tok_line.line, tok_line.col
 
 enum Schwasm_Op {
