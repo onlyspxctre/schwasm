@@ -66,7 +66,6 @@ int main(int argc, char **argv) {
 
     sp_sb_appendf(&generated, "CONTENT\nBEGIN\n\n");
 
-
     uint16_t next_addr = 0x0000;
     const struct Schwasm_Node *node = NULL;
     for (size_t i = 0; i < nodes.count; ++i) {
@@ -104,6 +103,7 @@ int main(int argc, char **argv) {
                 sp_unreachable();
         }
     }
+    sp_da_free(&nodes);
 
     // "calloc" until end
     if (0x0FFF > next_addr) {
