@@ -2,6 +2,8 @@
 
 BUILDDIR := $(abspath ./build)
 DEPSDIR := $(abspath ./deps)
+SRCDIR := $(abspath ./src)
+OBJDIR := $(abspath ./obj)
 INCLUDEDIR := $(abspath ./include)
 LIBDIR := $(abspath ./lib)
 
@@ -13,13 +15,15 @@ SPLEXER_VERSION := d8bab4d
 SPLEXER_FLAGS := GRANULAR_TOK_UNKNOWN=y NO_MULTICOMMENT=y
 
 ifneq ($(RELEASE),)
-CFLAGS += -O2 -static
+CFLAGS += -O2 -flto -static
 BUILDDIR := $(abspath ./build/release)
 else
 CFLAGS += -g
 endif
 
 ifneq ($(WINDOWS),)
+OBJDIR := $(abspath ./obj/win)
+
 CC +=  --target=x86_64-w64-mingw32 --sysroot=/usr/x86_64-w64-mingw32
 LDFLAGS += -L/usr/lib/gcc/x86_64-w64-mingw32/16.1.0 -DSP_STATIC
 LIBS := -l:libsplexer-win.a
@@ -27,9 +31,13 @@ SPLEXER_FLAGS += WINDOWS=y
 
 all: $(BUILDDIR)/schwasm.exe
 
-$(BUILDDIR)/schwasm.exe: schwasm.c $(LIBDIR)/libsplexer-win.a $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
+$(BUILDDIR)/schwasm.exe: $(OBJDIR)/schwasm.o $(LIBDIR)/libsplexer-win.a $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
 	mkdir -p $(BUILDDIR)
-	$(CC) $(CFLAGS) $(LDFLAGS) -ggdb -o $@ $< -L$(LIBDIR) $(LIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(SRCDIR)/cli.c $< -L$(LIBDIR) $(LIBS)
+
+$(OBJDIR)/%.o: $(SRCDIR)/%.c $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
+	mkdir -p $(OBJDIR)
+	$(CC) $(CFLAGS) -o $@ -DSP_STATIC -c $<
 
 $(LIBDIR)/libsplexer-win.a: $(DEPSDIR)/splexer
 	mkdir -p $(LIBDIR)
@@ -42,9 +50,13 @@ LIBS := -lsplexer
 
 all: $(BUILDDIR)/schwasm
 
-$(BUILDDIR)/schwasm: schwasm.c $(LIBDIR)/libsplexer.so $(LIBDIR)/libsplexer.a $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
+$(BUILDDIR)/schwasm: $(OBJDIR)/schwasm.o $(LIBDIR)/libsplexer.so $(LIBDIR)/libsplexer.a $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
 	mkdir -p $(BUILDDIR)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $< -L$(LIBDIR) $(LIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(SRCDIR)/cli.c $< -L$(LIBDIR) $(LIBS)
+
+$(OBJDIR)/%.o: $(SRCDIR)/%.c $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
+	mkdir -p $(OBJDIR)
+	$(CC) $(CFLAGS) -o $@ -c $<
 
 $(LIBDIR)/libsplexer.a: $(DEPSDIR)/splexer
 	mkdir -p $(LIBDIR)
@@ -67,7 +79,7 @@ $(INCLUDEDIR)/splexer.h: $(DEPSDIR)/splexer
 
 $(DEPSDIR)/splexer:
 	mkdir -p $(DEPSDIR)
-	git clone https://github.com/onlyspxctre/splexer.git $(DEPSDIR)/splexer
+	-(git clone https://github.com/onlyspxctre/splexer.git $(DEPSDIR)/splexer || (cd $(DEPSDIR)/splexer && git fetch --tags))
 	cd $(DEPSDIR)/splexer && git checkout $(SPLEXER_VERSION)
 
 clean:
@@ -75,3 +87,5 @@ clean:
 	rm -rf $(DEPSDIR)
 	rm -rf $(INCLUDEDIR)
 	rm -rf $(LIBDIR)
+	rm -rf *.o
+	rm -rf *.mif

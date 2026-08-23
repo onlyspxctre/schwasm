@@ -1,129 +1,11 @@
+#include "schwasm.h"
 #include <errno.h>
-#include <splexer.h>
-#include <sptl.h>
 
-#define ROM_SIZE 4096
-
-#define SCHWASM_FILE_FMT "%s:%ld:%ld:"
-#define schwasm_file_arg(name, tok_line) name, tok_line.line, tok_line.col
-
-enum Schwasm_Op {
-    SCHWASM_OP_TAB = 0x00,
-    SCHWASM_OP_TBA = 0x01,
-    SCHWASM_OP_LDAA_IMM = 0x02,
-    SCHWASM_OP_LDAB_IMM = 0x03,
-    SCHWASM_OP_LDAA = 0x04,
-    SCHWASM_OP_LDAB = 0x05,
-    SCHWASM_OP_STAA = 0x06,
-    SCHWASM_OP_STAB = 0x07,
-    SCHWASM_OP_LDX_IMM = 0x08,
-    SCHWASM_OP_LDY_IMM = 0x09,
-    SCHWASM_OP_LDX = 0x0A,
-    SCHWASM_OP_LDY = 0x0B,
-    SCHWASM_OP_LDAA_X = 0x0C,
-    SCHWASM_OP_LDAA_Y = 0x0D,
-    SCHWASM_OP_LDAB_X = 0x0E,
-    SCHWASM_OP_LDAB_Y = 0x0F,
-    SCHWASM_OP_STAA_X = 0x10,
-    SCHWASM_OP_STAA_Y = 0x11,
-    SCHWASM_OP_STAB_X = 0x12,
-    SCHWASM_OP_STAB_Y = 0x13,
-    SCHWASM_OP_SUM_BA = 0x14,
-    SCHWASM_OP_SUM_AB = 0x15,
-    SCHWASM_OP_AND_BA = 0x16,
-    SCHWASM_OP_AND_AB = 0x17,
-    SCHWASM_OP_OR_BA = 0x18,
-    SCHWASM_OP_OR_AB = 0x19,
-    SCHWASM_OP_COMA = 0x1A,
-    SCHWASM_OP_COMB = 0x1B,
-    SCHWASM_OP_SHFA_L = 0x1C,
-    SCHWASM_OP_SHFA_R = 0x1D,
-    SCHWASM_OP_SHFB_L = 0x1E,
-    SCHWASM_OP_SHFB_R = 0x1F,
-    SCHWASM_OP_BEQ = 0x20,
-    SCHWASM_OP_BNE = 0x21,
-    SCHWASM_OP_BN = 0x22,
-    SCHWASM_OP_BP = 0x23,
-    SCHWASM_OP_INX = 0x30,
-    SCHWASM_OP_INY = 0x31,
-    SCHWASM_AD_DC = 0x24,
-    SCHWASM_OP_UNKNOWN = 0x25,
-};
-
-static uint8_t SCHWASM_OP_COUNT[] = {
-    [SCHWASM_OP_TAB] = 1,
-    [SCHWASM_OP_TBA] = 1,
-    [SCHWASM_OP_LDAA_IMM] = 2,
-    [SCHWASM_OP_LDAB_IMM] = 2,
-    [SCHWASM_OP_LDAA] = 3,
-    [SCHWASM_OP_LDAB] = 3,
-    [SCHWASM_OP_STAA] = 3,
-    [SCHWASM_OP_STAB] = 3,
-    [SCHWASM_OP_LDX_IMM] = 3,
-    [SCHWASM_OP_LDY_IMM] = 3,
-    [SCHWASM_OP_LDX] = 3,
-    [SCHWASM_OP_LDY] = 3,
-    [SCHWASM_OP_LDAA_X] = 2,
-    [SCHWASM_OP_LDAA_Y] = 2,
-    [SCHWASM_OP_LDAB_X] = 2,
-    [SCHWASM_OP_LDAB_Y] = 2,
-    [SCHWASM_OP_STAA_X] = 2,
-    [SCHWASM_OP_STAA_Y] = 2,
-    [SCHWASM_OP_STAB_X] = 2,
-    [SCHWASM_OP_STAB_Y] = 2,
-    [SCHWASM_OP_SUM_BA] = 1,
-    [SCHWASM_OP_SUM_AB] = 1,
-    [SCHWASM_OP_AND_BA] = 1,
-    [SCHWASM_OP_AND_AB] = 1,
-    [SCHWASM_OP_OR_BA] = 1,
-    [SCHWASM_OP_OR_AB] = 1,
-    [SCHWASM_OP_COMA] = 1,
-    [SCHWASM_OP_COMB] = 1,
-    [SCHWASM_OP_SHFA_L] = 1,
-    [SCHWASM_OP_SHFA_R] = 1,
-    [SCHWASM_OP_SHFB_L] = 1,
-    [SCHWASM_OP_SHFB_R] = 1,
-    [SCHWASM_OP_BEQ] = 2,
-    [SCHWASM_OP_BNE] = 2,
-    [SCHWASM_OP_BN] = 2,
-    [SCHWASM_OP_BP] = 2,
-    [SCHWASM_OP_INX] = 1,
-    [SCHWASM_OP_INY] = 1,
-    [SCHWASM_AD_DC] = 1,
-    [SCHWASM_OP_UNKNOWN] = 0,
-};
-
-struct Schwasm_Node {
-    enum Schwasm_Op op;
-    union {
-        uint8_t word;
-        struct {
-            uint8_t lword;
-            uint8_t hword;
-        };
-        uint16_t dword;
-    };
-    uint16_t addr;
-};
-
-int schwasm_node_lesser_cmp(const struct Schwasm_Node lhs, const struct Schwasm_Node rhs) {
+static inline int schwasm_node_lesser_cmp(const struct Schwasm_Node lhs, const struct Schwasm_Node rhs) {
     return lhs.addr < rhs.addr;
 }
 
-struct Schwasm {
-    Sp_Lexer lexer;
-    Sp_Heap(struct Schwasm_Node) nodes;
-    Sp_Bitset used_addrs;
-    struct {
-        size_t idx;
-        bool busy;
-    } lexer_attr;
-    uint16_t addr; // GCPU uses a 4K ROM, only requires 12-bit wide address; 16-bits is more than enough
-    bool addr_valid;
-    const char *filename;
-};
-
-static inline struct Schwasm schwasm_init(const char *filename) {
+struct Schwasm schwasm_init(const char *filename) {
     struct Schwasm schwasm = {
         .nodes = {
             .cmp = &schwasm_node_lesser_cmp,
@@ -135,9 +17,7 @@ static inline struct Schwasm schwasm_init(const char *filename) {
     return schwasm;
 }
 
-static inline const Sp_Lexer_Token *schwasm_get_token(struct Schwasm *schwasm);
-
-static inline void schwasm_expect_org(struct Schwasm *schwasm) {
+void schwasm_expect_org(struct Schwasm *schwasm) {
     if (!schwasm->addr_valid) {
         Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
         sp_die(1, SCHWASM_FILE_FMT " No preceding ORG to define initial address\n", schwasm_file_arg(schwasm->filename, token_line));
@@ -147,7 +27,7 @@ static inline void schwasm_expect_org(struct Schwasm *schwasm) {
     }
 }
 
-static inline void schwasm_create_node(struct Schwasm *schwasm, enum Schwasm_Op op, uint16_t dword) {
+void schwasm_create_node(struct Schwasm *schwasm, enum Schwasm_Op op, uint16_t dword) {
     schwasm_expect_org(schwasm);
 
     struct Schwasm_Node node = (struct Schwasm_Node) {
@@ -190,14 +70,14 @@ static inline void schwasm_create_node(struct Schwasm *schwasm, enum Schwasm_Op 
     sp_heap_push(&schwasm->nodes, node);
 }
 
-static inline const Sp_Lexer_Token *schwasm_get_token(struct Schwasm *schwasm) {
+const Sp_Lexer_Token *schwasm_get_token(struct Schwasm *schwasm) {
     if (schwasm->lexer_attr.idx >= schwasm->lexer.tokens.count) {
         return NULL;
     }
     return &schwasm->lexer.tokens.data[schwasm->lexer_attr.idx];
 }
 
-static inline const Sp_Lexer_Token *schwasm_peek_token(struct Schwasm *schwasm) {
+const Sp_Lexer_Token *schwasm_peek_token(struct Schwasm *schwasm) {
     if (schwasm->lexer_attr.idx + 1 >= schwasm->lexer.tokens.count) {
         return NULL;
     }
@@ -205,16 +85,12 @@ static inline const Sp_Lexer_Token *schwasm_peek_token(struct Schwasm *schwasm) 
     return &schwasm->lexer.tokens.data[schwasm->lexer_attr.idx + 1];
 }
 
-static inline const Sp_Lexer_Token *schwasm_next_token(struct Schwasm *schwasm) {
+const Sp_Lexer_Token *schwasm_next_token(struct Schwasm *schwasm) {
     ++schwasm->lexer_attr.idx;
     return schwasm_get_token(schwasm);
 }
 
-enum Schwasm_Value_Type {
-    SCHWASM_VALUE_HEX,
-    SCHWASM_VALUE_DECIMAL,
-};
-static inline enum Schwasm_Value_Type schwasm_expect_value(struct Schwasm *schwasm) {
+enum Schwasm_Value_Type schwasm_expect_value(struct Schwasm *schwasm) {
     const Sp_Lexer_Token *prev = schwasm_get_token(schwasm);
     const Sp_Lexer_Token *token = schwasm_next_token(schwasm);
 
@@ -253,7 +129,7 @@ static inline enum Schwasm_Value_Type schwasm_expect_value(struct Schwasm *schwa
     }
 }
 
-static inline void schwasm_destroy(struct Schwasm *schwasm) {
+void schwasm_destroy(struct Schwasm *schwasm) {
     splexer_destroy(&schwasm->lexer);
     sp_bitset_free(&schwasm->used_addrs);
     sp_heap_free(&schwasm->nodes);
@@ -279,7 +155,7 @@ enum GCPU_REG {
     GCPU_REGY,
 };
 
-void org(struct Schwasm *schwasm) {
+static inline void org(struct Schwasm *schwasm) {
     long value;
     const Sp_Lexer_Token *token;
     switch (schwasm_expect_value(schwasm)) {
@@ -307,12 +183,11 @@ void org(struct Schwasm *schwasm) {
     schwasm->addr_valid = true;
 }
 
-
-void ld(struct Schwasm *schwasm, enum GCPU_REG reg) {
+static inline void ld(struct Schwasm *schwasm, enum GCPU_REG reg) {
     schwasm_expect_org(schwasm);
 
     const Sp_Lexer_Token *token = schwasm_get_token(schwasm);
-    const Sp_Lexer_Token *next =  schwasm_peek_token(schwasm);
+    const Sp_Lexer_Token *next = schwasm_peek_token(schwasm);
 
     Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
     Sp_Lexer_Token_Line next_line = splexer_token_get_line(&schwasm->lexer, next);
@@ -322,7 +197,7 @@ void ld(struct Schwasm *schwasm, enum GCPU_REG reg) {
 
     enum Schwasm_Op op;
     long value;
-    if (next->type == TOK_Pound) { // immediate addressing
+    if (next->type == TOK_Pound) {   // immediate addressing
         schwasm_next_token(schwasm); // consume the TOK_Pound
 
         switch (reg) {
@@ -445,11 +320,11 @@ void ld(struct Schwasm *schwasm, enum GCPU_REG reg) {
     }
 }
 
-void st(struct Schwasm *schwasm, enum GCPU_REG reg) {
+static inline void st(struct Schwasm *schwasm, enum GCPU_REG reg) {
     schwasm_expect_org(schwasm);
 
     const Sp_Lexer_Token *token = schwasm_get_token(schwasm);
-    const Sp_Lexer_Token *next =  schwasm_peek_token(schwasm);
+    const Sp_Lexer_Token *next = schwasm_peek_token(schwasm);
 
     Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
     Sp_Lexer_Token_Line next_line = splexer_token_get_line(&schwasm->lexer, next);
@@ -494,7 +369,7 @@ void st(struct Schwasm *schwasm, enum GCPU_REG reg) {
     }
 }
 
-void branch(struct Schwasm *schwasm, enum Schwasm_Op op) {
+static inline void branch(struct Schwasm *schwasm, enum Schwasm_Op op) {
     switch (op) {
         case SCHWASM_OP_BNE:
         case SCHWASM_OP_BEQ:
@@ -508,7 +383,7 @@ void branch(struct Schwasm *schwasm, enum Schwasm_Op op) {
     schwasm_expect_org(schwasm);
 
     const Sp_Lexer_Token *token = schwasm_get_token(schwasm);
-    const Sp_Lexer_Token *next =  schwasm_peek_token(schwasm);
+    const Sp_Lexer_Token *next = schwasm_peek_token(schwasm);
 
     Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
     Sp_Lexer_Token_Line next_line = splexer_token_get_line(&schwasm->lexer, next);
@@ -546,7 +421,7 @@ enum Declare_Directive {
 // This is because Splexer currently does not support periods in identifiers.
 // As a result, this means that something like "DC   .   B" with whitespace in the middle of the directive is completely valid.
 // We must fix this on the Splexer side; we will probably implement a compile flag that enables periods within identifier names.
-void declare_directive(struct Schwasm *schwasm, enum Declare_Directive directive) {
+static inline void declare_directive(struct Schwasm *schwasm, enum Declare_Directive directive) {
     const Sp_Lexer_Token *prev = schwasm_get_token(schwasm);
     const Sp_Lexer_Token *token = schwasm_next_token(schwasm);
 
@@ -618,255 +493,120 @@ void declare_directive(struct Schwasm *schwasm, enum Declare_Directive directive
     }
 }
 
-static Sp_String_Builder generated = {0};
-static struct Schwasm schwasm = {0};
-
-static const char *input_path = NULL;
-static Sp_String_Builder output_path = {0};
-enum Output_Mode {
-    OUTPUT_NIL,
-    OUTPUT_FILE,
-    OUTPUT_PRINT
-};
-static enum Output_Mode output_mode = OUTPUT_NIL;
-
-void cleanup() {
-    sp_da_free(&generated);
-    sp_da_free(&output_path);
-    schwasm_destroy(&schwasm);
-}
-
-int main(int argc, char **argv) {
-    for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "-D") == 0) {
-            if (i + 1 >= argc) {
-                sp_die(1, "-D: expected a path\n");
-            }
-            if (output_mode == OUTPUT_PRINT) {
-                sp_die(1, "-D: flag conflicts with -p\n");
-            }
-            output_mode = OUTPUT_FILE;
-            sp_da_clear(&output_path);
-            sp_sb_appendf(&output_path, "%s", argv[++i]);
-        } else if (strcmp(argv[i], "-p") == 0) {
-            if (output_mode == OUTPUT_FILE) {
-                sp_die(1, "-p: flag conflicts with -D\n");
-            }
-
-            output_mode = OUTPUT_PRINT;
-        } else {
-            if (input_path) {
-                sp_die(1, "Unknown trailing argument \"%s\"\n", argv[i]);
-            }
-
-            input_path = argv[i];
-        }
-    }
-
-    if (!input_path) {
-        sp_die(1, "Usage: `schwasm file.asm`\n");
-    }
-
-    schwasm = schwasm_init(input_path);
-    atexit(cleanup);
-
-    if (splexer_init(&schwasm.lexer, input_path) != 0) {
-        sp_die(1, "Unable to open file: \"%s\": %s\n", input_path, strerror(errno));
-    }
-
+Schwasm_Nodes schwasm_generate_ir(struct Schwasm *schwasm) {
     Sp_Lexer_Return_Code code;
-    while ((code = splexer_tokenize(&schwasm.lexer)) == SPLEXER_OK)
+    while ((code = splexer_tokenize(&schwasm->lexer)) == SPLEXER_OK)
         ;
 
     if (code == SPLEXER_ERROR) {
-        if (schwasm.lexer.state == SPLEXER_STATE_MULTICOMMENT) {
+        if (schwasm->lexer.state == SPLEXER_STATE_MULTICOMMENT) {
             sp_die(1, "C-style multi-line comments are not supported!\n");
         } else {
             sp_die(1, "Unknown tokenizer error occurred!\n");
         }
     }
 
-    sp_sb_appendf(&generated, "-- \tGenerated by Schwasm.\t --\n");
-    sp_sb_appendf(&generated, "DEPTH = %d;\n", ROM_SIZE);
-    sp_sb_appendf(&generated, "WIDTH = 8;\n\n");
-
-    sp_sb_appendf(&generated, "ADDRESS_RADIX = HEX;\n");
-    sp_sb_appendf(&generated, "DATA_RADIX = HEX;\n\n");
-
-    sp_sb_appendf(&generated, "CONTENT\nBEGIN\n\n");
-
     const Sp_Lexer_Token *prev = NULL;
-    const Sp_Lexer_Token *token = schwasm_get_token(&schwasm);
+    const Sp_Lexer_Token *token = schwasm_get_token(schwasm);
     Sp_Lexer_Token_Line prev_line = {0};
-    Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm.lexer, token);
+    Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
 
     if (!token) {
-        sp_die(1, SCHWASM_FILE_FMT " Unexpected initial token\n", schwasm_file_arg(schwasm.filename, ((Sp_Lexer_Token_Line) {
-                                                                                                         .line = 1,
-                                                                                                         .col = 1,
-                                                                                                     })));
+        sp_die(1, SCHWASM_FILE_FMT " Unexpected initial token\n", schwasm_file_arg(schwasm->filename, ((Sp_Lexer_Token_Line) {
+                                                                                                          .line = 1,
+                                                                                                          .col = 1,
+                                                                                                      })));
     }
 
     do {
         // prev_line is calculated at the end of previous iteration
-        token_line = splexer_token_get_line(&schwasm.lexer, token);
+        token_line = splexer_token_get_line(&schwasm->lexer, token);
         if (prev && prev_line.line != token_line.line) {
-            schwasm.lexer_attr.busy = false;
-        } else if (schwasm.lexer_attr.busy) { // some token after a completed instruction
-            sp_die(1, SCHWASM_FILE_FMT " Trailing tokens after instruction\n", schwasm_file_arg(schwasm.filename, token_line));
+            schwasm->lexer_attr.busy = false;
+        } else if (schwasm->lexer_attr.busy) { // some token after a completed instruction
+            sp_die(1, SCHWASM_FILE_FMT " Trailing tokens after instruction\n", schwasm_file_arg(schwasm->filename, token_line));
         }
 
         if (token->type != TOK_ID) {
             sp_die(1,
                    SCHWASM_FILE_FMT " Failed to parse unknown symbol \"%s\"\n",
-                   schwasm_file_arg(schwasm.filename, token_line),
+                   schwasm_file_arg(schwasm->filename, token_line),
                    SPLEXER_TOKENS_LITERAL[token->type]);
         }
 
-        schwasm.lexer_attr.busy = true;
+        schwasm->lexer_attr.busy = true;
 
         if (sp_sv_eq(&sp_cstr_slice("ORG"), &token->sv)) {
-            org(&schwasm);
+            org(schwasm);
         } else if (sp_sv_eq(&sp_cstr_slice("TAB"), &token->sv)) {
-            schwasm_create_node(&schwasm, SCHWASM_OP_TAB, 0);
+            schwasm_create_node(schwasm, SCHWASM_OP_TAB, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("TBA"), &token->sv)) {
-            schwasm_create_node(&schwasm, SCHWASM_OP_TBA, 0);
+            schwasm_create_node(schwasm, SCHWASM_OP_TBA, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("LDAA"), &token->sv)) {
-            ld(&schwasm, GCPU_REGA);
+            ld(schwasm, GCPU_REGA);
         } else if (sp_sv_eq(&sp_cstr_slice("LDAB"), &token->sv)) {
-            ld(&schwasm, GCPU_REGB);
+            ld(schwasm, GCPU_REGB);
         } else if (sp_sv_eq(&sp_cstr_slice("LDX"), &token->sv)) {
-            ld(&schwasm, GCPU_REGX);
+            ld(schwasm, GCPU_REGX);
         } else if (sp_sv_eq(&sp_cstr_slice("LDY"), &token->sv)) {
-            ld(&schwasm, GCPU_REGY);
+            ld(schwasm, GCPU_REGY);
         } else if (sp_sv_eq(&sp_cstr_slice("STAA"), &token->sv)) {
-            st(&schwasm, GCPU_REGA);
+            st(schwasm, GCPU_REGA);
         } else if (sp_sv_eq(&sp_cstr_slice("STAB"), &token->sv)) {
-            st(&schwasm, GCPU_REGB);
+            st(schwasm, GCPU_REGB);
         } else if (sp_sv_eq(&sp_cstr_slice("SUM_BA"), &token->sv)) {
-            schwasm_create_node(&schwasm, SCHWASM_OP_SUM_BA, 0);
+            schwasm_create_node(schwasm, SCHWASM_OP_SUM_BA, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("SUM_AB"), &token->sv)) {
-            schwasm_create_node(&schwasm, SCHWASM_OP_SUM_AB, 0);
+            schwasm_create_node(schwasm, SCHWASM_OP_SUM_AB, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("AND_BA"), &token->sv)) {
-            schwasm_create_node(&schwasm, SCHWASM_OP_AND_BA, 0);
+            schwasm_create_node(schwasm, SCHWASM_OP_AND_BA, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("AND_AB"), &token->sv)) {
-            schwasm_create_node(&schwasm, SCHWASM_OP_AND_AB, 0);
+            schwasm_create_node(schwasm, SCHWASM_OP_AND_AB, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("OR_BA"), &token->sv)) {
-            schwasm_create_node(&schwasm, SCHWASM_OP_OR_BA, 0);
+            schwasm_create_node(schwasm, SCHWASM_OP_OR_BA, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("OR_AB"), &token->sv)) {
-            schwasm_create_node(&schwasm, SCHWASM_OP_OR_AB, 0);
+            schwasm_create_node(schwasm, SCHWASM_OP_OR_AB, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("COMA"), &token->sv)) {
-            schwasm_create_node(&schwasm, SCHWASM_OP_COMA, 0);
+            schwasm_create_node(schwasm, SCHWASM_OP_COMA, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("COMB"), &token->sv)) {
-            schwasm_create_node(&schwasm, SCHWASM_OP_COMB, 0);
+            schwasm_create_node(schwasm, SCHWASM_OP_COMB, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("SHFA_L"), &token->sv)) {
-            schwasm_create_node(&schwasm, SCHWASM_OP_SHFA_L, 0);
+            schwasm_create_node(schwasm, SCHWASM_OP_SHFA_L, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("SHFA_R"), &token->sv)) {
-            schwasm_create_node(&schwasm, SCHWASM_OP_SHFA_R, 0);
+            schwasm_create_node(schwasm, SCHWASM_OP_SHFA_R, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("SHFB_L"), &token->sv)) {
-            schwasm_create_node(&schwasm, SCHWASM_OP_SHFB_L, 0);
+            schwasm_create_node(schwasm, SCHWASM_OP_SHFB_L, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("SHFB_R"), &token->sv)) {
-            schwasm_create_node(&schwasm, SCHWASM_OP_SHFB_R, 0);
+            schwasm_create_node(schwasm, SCHWASM_OP_SHFB_R, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("BNE"), &token->sv)) {
-            branch(&schwasm, SCHWASM_OP_BNE);
+            branch(schwasm, SCHWASM_OP_BNE);
         } else if (sp_sv_eq(&sp_cstr_slice("BEQ"), &token->sv)) {
-            branch(&schwasm, SCHWASM_OP_BEQ);
+            branch(schwasm, SCHWASM_OP_BEQ);
         } else if (sp_sv_eq(&sp_cstr_slice("BN"), &token->sv)) {
-            branch(&schwasm, SCHWASM_OP_BN);
+            branch(schwasm, SCHWASM_OP_BN);
         } else if (sp_sv_eq(&sp_cstr_slice("BP"), &token->sv)) {
-            branch(&schwasm, SCHWASM_OP_BP);
+            branch(schwasm, SCHWASM_OP_BP);
         } else if (sp_sv_eq(&sp_cstr_slice("INX"), &token->sv)) {
-            schwasm_create_node(&schwasm, SCHWASM_OP_INX, 0);
+            schwasm_create_node(schwasm, SCHWASM_OP_INX, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("INY"), &token->sv)) {
-            schwasm_create_node(&schwasm, SCHWASM_OP_INY, 0);
+            schwasm_create_node(schwasm, SCHWASM_OP_INY, 0);
         } else if (sp_sv_eq(&sp_cstr_slice("DC"), &token->sv)) {
-            declare_directive(&schwasm, DC_B);
+            declare_directive(schwasm, DC_B);
         } else if (sp_sv_eq(&sp_cstr_slice("DS"), &token->sv)) {
-            declare_directive(&schwasm, DS_B);
+            declare_directive(schwasm, DS_B);
         } else {
-            sp_die(1, SCHWASM_FILE_FMT " Failed to parse unknown instruction \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm.filename, token_line), sp_sv_arg(token->sv));
+            sp_die(1, SCHWASM_FILE_FMT " Failed to parse unknown instruction \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm->filename, token_line), sp_sv_arg(token->sv));
         }
 
-        prev = schwasm_get_token(&schwasm);
-        prev_line = splexer_token_get_line(&schwasm.lexer, prev);
-    } while ((token = schwasm_next_token(&schwasm)));
+        prev = schwasm_get_token(schwasm);
+        prev_line = splexer_token_get_line(&schwasm->lexer, prev);
+    } while ((token = schwasm_next_token(schwasm)));
 
-    uint16_t next_addr = 0x0000;
-    struct Schwasm_Node node;
-
-    while (schwasm.nodes.count > 0) {
-        node = sp_heap_top(&schwasm.nodes);
-
-        // "calloc" unspecified memory regions
-        if (node.addr > next_addr) {
-            sp_sb_appendf(&generated, "[%04X..%04X]\t:\t%02X;\n\n", next_addr, node.addr - 1, 0x00);
-        }
-
-        next_addr = node.addr + SCHWASM_OP_COUNT[node.op];
-
-        switch (SCHWASM_OP_COUNT[node.op]) {
-            case 0:
-                sp_sb_appendf(&generated, "[%04X..%04X]\t:\t%02X;\n\n", node.addr, node.addr + node.dword - 1, 0x00); // allocate node.dword bytes
-                next_addr = node.addr + node.dword;
-                break;
-            case 1:
-                if (node.op == SCHWASM_AD_DC) {
-                    sp_sb_appendf(&generated, "%04X\t\t:\t%02X;\n\n", node.addr, node.word);
-                } else {
-                    sp_sb_appendf(&generated, "%04X\t\t:\t%02X;\n\n", node.addr, node.op);
-                }
-                break;
-            case 2:
-                sp_sb_appendf(&generated, "%04X\t\t:\t%02X;\n", node.addr, node.op);
-                sp_sb_appendf(&generated, "%04X\t\t:\t%02X;\n\n", node.addr + 1, node.word);
-                break;
-            case 3:
-                sp_sb_appendf(&generated, "%04X\t\t:\t%02X;\n", node.addr, node.op);
-                sp_sb_appendf(&generated, "%04X\t\t:\t%02X;\n", node.addr + 1, node.lword);
-                sp_sb_appendf(&generated, "%04X\t\t:\t%02X;\n\n", node.addr + 2, node.hword);
-                break;
-            default:
-                sp_unreachable();
-        }
-        
-
-        sp_heap_pop(&schwasm.nodes);
+    Schwasm_Nodes nodes = {0};
+    while (schwasm->nodes.count > 0) {
+        sp_da_push(&nodes, sp_heap_top(&schwasm->nodes));
+        sp_heap_pop(&schwasm->nodes);
     }
 
-    // "calloc" until end
-    if (0x0FFF > next_addr) {
-        sp_sb_appendf(&generated, "[%04X..%04X]\t:\t%02X;\n", next_addr, 0x0FFF, 0x00);
-    }
-
-    sp_sb_appendf(&generated, "END;\n");
-
-    FILE *output;
-    switch (output_mode) {
-        case OUTPUT_NIL:
-            sp_sb_appendf(&output_path, ".");
-        case OUTPUT_FILE:
-            sp_sb_appendf(&output_path, "/rom.mif");
-            output = fopen(output_path.data, "w");
-
-            if (!output) {
-                sp_die(1, "Unable to write to file \"%s\": %s\n", output_path.data, strerror(errno));
-            }
-
-            errno = 0;
-            if (generated.count > fwrite(generated.data, sizeof(char), generated.count, output)) {
-                fclose(output);
-                sp_die(1, "fwrite(): %s", strerror(errno));
-            }
-
-            errno = 0;
-            if (fclose(output) != 0) {
-                sp_die(1, "fclose(): %s", strerror(errno));
-            }
-            break;
-        case OUTPUT_PRINT:
-            printf("%s", generated.data);
-            break;
-    }
-
-    return 0;
+    return nodes;
 }
