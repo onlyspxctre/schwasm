@@ -89,9 +89,9 @@ $(SPLEXER_STAMP):
 clean:
 	rm -rf $(BUILDDIR)
 	rm -rf $(OBJDIR)
+	rm -rf $(INCLUDEDIR)
+	rm -rf $(LIBDIR)
 	rm -rf *.mif
 
 depsclean:
-	rm -rf $(INCLUDEDIR)
-	rm -rf $(LIBDIR)
 	rm -rf $(DEPSDIR)
