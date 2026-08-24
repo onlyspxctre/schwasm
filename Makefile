@@ -1,4 +1,4 @@
-.PHONY: all clean
+.PHONY: all clean depsclean
 
 BUILDDIR := $(abspath ./build)
 DEPSDIR := $(abspath ./deps)
@@ -88,8 +88,10 @@ $(SPLEXER_STAMP):
 
 clean:
 	rm -rf $(BUILDDIR)
-	rm -rf $(DEPSDIR)
 	rm -rf $(OBJDIR)
+	rm -rf *.mif
+
+depsclean:
 	rm -rf $(INCLUDEDIR)
 	rm -rf $(LIBDIR)
-	rm -rf *.mif
+	rm -rf $(DEPSDIR)
