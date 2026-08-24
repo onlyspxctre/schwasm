@@ -8,7 +8,7 @@ INCLUDEDIR := $(abspath ./include)
 LIBDIR := $(abspath ./lib)
 
 CC := clang
-CFLAGS := -Wall -Wextra -Wshadow -std=c11 -fcolor-diagnostics -I$(INCLUDEDIR)
+CFLAGS := -Wall -Wextra -Wshadow -Winline -std=c11 -fcolor-diagnostics -I$(INCLUDEDIR)
 LDFLAGS := -fuse-ld=lld
 
 SPLEXER_VERSION := 1aeb2f8
