@@ -1,7 +1,7 @@
 #include <splexer.h>
 #include <sptl.h>
 
-#define ROM_SIZE 4096
+#define ADDR_END 0x1FFF
 
 #define SCHWASM_FILE_FMT "%s:%zu:%zu:"
 #define schwasm_file_arg(name, tok_line) name, tok_line.line, tok_line.col
@@ -115,7 +115,7 @@ struct Schwasm {
         size_t idx;
         bool busy;
     } lexer_attr;
-    uint16_t addr; // GCPU uses a 4K ROM, only requires 12-bit wide address; 16-bits is more than enough
+    uint16_t addr; // GCPU uses a 4K ROM and 4K RAM, no more than 13 bits are required
     bool addr_valid;
     const char *filename;
 };

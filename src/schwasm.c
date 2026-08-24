@@ -21,7 +21,7 @@ void schwasm_expect_org(struct Schwasm *schwasm) {
     if (!schwasm->addr_valid) {
         Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
         sp_die(1, SCHWASM_FILE_FMT " No preceding ORG to define initial address\n", schwasm_file_arg(schwasm->filename, token_line));
-    } else if (schwasm->addr >= ROM_SIZE) {
+    } else if (schwasm->addr > ADDR_END) {
         Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
         sp_die(1, SCHWASM_FILE_FMT " Address out of bounds\n", schwasm_file_arg(schwasm->filename, token_line));
     }
@@ -39,7 +39,7 @@ void schwasm_create_node(struct Schwasm *schwasm, enum Schwasm_Op op, uint16_t d
     Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
     uint16_t count = (op == SCHWASM_OP_UNKNOWN) ? dword : SCHWASM_OP_COUNT[op]; // if SCHWASM_OP_UNKNOWN we are doing DS
     for (uint16_t i = 0; i < count; ++i) {
-        if (schwasm->addr >= ROM_SIZE) {
+        if (schwasm->addr > ADDR_END) {
             sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04X)\n", schwasm_file_arg(schwasm->filename, token_line), schwasm->addr);
         }
         if (sp_bitset_check(&schwasm->used_addrs, schwasm->addr)) {
@@ -311,7 +311,7 @@ static inline void ld(struct Schwasm *schwasm, enum GCPU_REG reg) {
             schwasm_create_node(schwasm, op, (uint16_t) value);
 
         } else {
-            if (value >= ROM_SIZE) {
+            if (value > ADDR_END) {
                 sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), value);
             }
 
@@ -360,7 +360,7 @@ static inline void st(struct Schwasm *schwasm, enum GCPU_REG reg) {
                 break;
         }
 
-        if (addr >= ROM_SIZE) {
+        if (addr > ADDR_END) {
             token_line = splexer_token_get_line(&schwasm->lexer, token);
             sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), addr);
         }
@@ -480,12 +480,14 @@ static inline void declare_directive(struct Schwasm *schwasm, enum Declare_Direc
                     value = schwasm_get_token(schwasm)->int_lit.value;
                     break;
             }
-            if (value > (long) ROM_SIZE - schwasm->addr) {
-                token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
-                sp_die(1, SCHWASM_FILE_FMT " Store address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), schwasm->addr + value);
+            token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
+            if (schwasm->addr < 0x1000) {
+                sp_die(1, SCHWASM_FILE_FMT " Cannot reserve bytes in read-only ROM (0x%04X)\n", schwasm_file_arg(schwasm->filename, token_line), schwasm->addr);
+            }
+            if (value > (long) ADDR_END + 1 - schwasm->addr) {
+                sp_die(1, SCHWASM_FILE_FMT " Reserved address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), schwasm->addr + value);
             }
             if (value <= 0) {
-                token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
                 sp_die(1, SCHWASM_FILE_FMT " Cannot store 0 bytes\n", schwasm_file_arg(schwasm->filename, token_line));
             }
             schwasm_create_node(schwasm, SCHWASM_OP_UNKNOWN, (uint16_t) value);
