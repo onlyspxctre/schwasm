@@ -33,7 +33,7 @@ SPLEXER_FLAGS += WINDOWS=y
 
 all: $(BUILDDIR)/schwasm.exe
 
-$(BUILDDIR)/schwasm.exe: $(OBJDIR)/schwasm.o $(SRCDIR)/schwasm.c $(SRCDIR)/schwasm.h $(LIBDIR)/libsplexer-win.a $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
+$(BUILDDIR)/schwasm.exe: $(OBJDIR)/schwasm.o $(SRCDIR)/cli.c $(SRCDIR)/schwasm.c $(SRCDIR)/schwasm.h $(LIBDIR)/libsplexer-win.a $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
 	mkdir -p $(BUILDDIR)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(SRCDIR)/cli.c $< -L$(LIBDIR) $(LIBS)
 
