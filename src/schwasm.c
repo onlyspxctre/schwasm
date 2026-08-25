@@ -1,17 +1,10 @@
 #include "schwasm.h"
 #include <errno.h>
-
-static inline int schwasm_node_lesser_cmp(const struct Schwasm_Node lhs, const struct Schwasm_Node rhs) {
-    return lhs.addr < rhs.addr;
-}
+#include <assert.h>
 
 struct Schwasm schwasm_init(const char *filename) {
     struct Schwasm schwasm = {
-        .nodes = {
-            .cmp = &schwasm_node_lesser_cmp,
-        },
         .filename = filename,
-        .addr = UINT16_MAX,
     };
 
     return schwasm;
@@ -67,7 +60,7 @@ void schwasm_create_node(struct Schwasm *schwasm, enum Schwasm_Op op, uint16_t d
             sp_unreachable();
     }
 
-    sp_heap_push(&schwasm->nodes, node);
+    sp_da_push(&schwasm->nodes, node);
 }
 
 const Sp_Lexer_Token *schwasm_get_token(struct Schwasm *schwasm) {
@@ -132,7 +125,7 @@ enum Schwasm_Value_Type schwasm_expect_value(struct Schwasm *schwasm) {
 void schwasm_destroy(struct Schwasm *schwasm) {
     splexer_destroy(&schwasm->lexer);
     sp_bitset_free(&schwasm->used_addrs);
-    sp_heap_free(&schwasm->nodes);
+    sp_da_free(&schwasm->nodes);
 }
 
 static inline long parse_hex_or_die(struct Schwasm *schwasm, const Sp_Lexer_Token *token) {
@@ -484,7 +477,7 @@ static inline void declare_directive(struct Schwasm *schwasm, enum Declare_Direc
             if (schwasm->addr < 0x1000) {
                 sp_die(1, SCHWASM_FILE_FMT " Cannot reserve bytes in read-only ROM (0x%04X)\n", schwasm_file_arg(schwasm->filename, token_line), schwasm->addr);
             }
-            if (value > (long) ADDR_END + 1 - schwasm->addr) {
+            if (value > (long) ADDR_LEN - schwasm->addr) {
                 sp_die(1, SCHWASM_FILE_FMT " Reserved address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), schwasm->addr + value);
             }
             if (value <= 0) {
@@ -605,9 +598,22 @@ Schwasm_Nodes schwasm_generate_ir(struct Schwasm *schwasm) {
     } while ((token = schwasm_next_token(schwasm)));
 
     Schwasm_Nodes nodes = {0};
-    while (schwasm->nodes.count > 0) {
-        sp_da_push(&nodes, sp_heap_top(&schwasm->nodes));
-        sp_heap_pop(&schwasm->nodes);
+    sp_da_reserve(&nodes, schwasm->nodes.count);
+
+    // pigeonhole sort
+    uint16_t ordered_idx[ADDR_LEN];
+    memset(ordered_idx, 0xFF, ADDR_LEN * sizeof(uint16_t)); // use 0xFFFF as sentinel value since valid addresses 0x0000 -> 0x1FFF (change if this ever changes)
+
+    for (uint16_t i = 0; i < schwasm->nodes.count; ++i) {
+        uint16_t a = schwasm->nodes.data[i].addr;
+        assert(ordered_idx[a] == 0xFFFF); // this should be enforced by uniqueness invariant
+
+        ordered_idx[a] = i;
+    }
+
+    for (uint16_t i = 0; i < ADDR_LEN; ++i) {
+        if (ordered_idx[i] == 0xFFFF) continue;
+        sp_da_push(&nodes, schwasm->nodes.data[ordered_idx[i]]);
     }
 
     return nodes;

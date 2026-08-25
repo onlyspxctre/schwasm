@@ -2,6 +2,7 @@
 #include <sptl.h>
 
 #define ADDR_END 0x1FFF
+#define ADDR_LEN 0x2000
 
 #define SCHWASM_FILE_FMT "%s:%zu:%zu:"
 #define schwasm_file_arg(name, tok_line) name, tok_line.line, tok_line.col
@@ -109,7 +110,7 @@ typedef Sp_Dynamic_Array(struct Schwasm_Node) Schwasm_Nodes;
 
 struct Schwasm {
     Sp_Lexer lexer;
-    Sp_Heap(struct Schwasm_Node) nodes;
+    Sp_Dynamic_Array(struct Schwasm_Node) nodes;
     Sp_Bitset used_addrs;
     struct {
         size_t idx;
