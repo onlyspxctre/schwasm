@@ -49,7 +49,7 @@ enum Schwasm_Op {
     SCHWASM_OP_UNKNOWN = 0x25,
 };
 
-static uint8_t SCHWASM_OP_COUNT[] = {
+static const uint8_t SCHWASM_OP_COUNT[] = {
     [SCHWASM_OP_TAB] = 1,
     [SCHWASM_OP_TBA] = 1,
     [SCHWASM_OP_LDAA_IMM] = 2,
