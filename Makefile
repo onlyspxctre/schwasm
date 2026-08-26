@@ -12,7 +12,7 @@ CC := clang
 CFLAGS := -Wall -Wextra -Wshadow -Winline -std=c11 -fcolor-diagnostics -I$(INCLUDEDIR)
 LDFLAGS := -fuse-ld=lld
 
-SPLEXER_VERSION := ca51b62
+SPLEXER_VERSION := 0d5d84b
 SPLEXER_FLAGS := GRANULAR_TOK_UNKNOWN=y NO_MULTICOMMENT=y
 
 ifneq ($(RELEASE),)
@@ -25,8 +25,9 @@ CONFIG := debug
 endif
 
 ifneq ($(WINDOWS),)
-CC +=  --target=x86_64-w64-mingw32 --sysroot=/usr/x86_64-w64-mingw32
-LDFLAGS += -L/usr/lib/gcc/x86_64-w64-mingw32/16.1.0 -DSP_STATIC
+OBJDIR := $(abspath ./obj/win)
+
+CC +=  --target=x86_64-w64-mingw32 -DSP_STATIC
 LIBS := -l:libsplexer-win.a
 SPLEXER_FLAGS += WINDOWS=y
 CONFIG := win-$(CONFIG)
