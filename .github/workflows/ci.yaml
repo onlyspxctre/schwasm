@@ -1,0 +1,39 @@
+name: Schwasm Release Builds
+on:
+  push:
+    branches: [ "master" ]
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux
+            make_flags: ""
+            build_dir: "release"
+            artifact_name: schwasm-linux-${{ github.sha }}-release
+            binary_name: schwasm
+          - target: windows
+            make_flags: "WINDOWS=y"
+            build_dir: "win-release"
+            artifact_name: schwasm-win-${{ github.sha }}-release
+            binary_name: schwasm.exe
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: mingw
+        if: matrix.target == 'windows'
+        uses: egor-tensin/setup-mingw@v2
+        with:
+          platform: x64
+
+      - name: build ($ {{ matrix.target }})
+        run: make -j2 RELEASE=y ${{ matrix.make_flags }}
+
+      - name: artifacts upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ./build/${{ matrix.build_dir }}/${{ matrix.binary_name }}
