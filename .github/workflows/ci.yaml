@@ -12,12 +12,12 @@ jobs:
           - target: linux
             make_flags: ""
             build_dir: "release"
-            artifact_name: schwasm-linux-${{ github.sha::0:7 }}-release
+            artifact_name: schwasm-linux-${{ github.sha }}-release
             binary_name: schwasm
           - target: windows
             make_flags: "WINDOWS=y"
             build_dir: "win-release"
-            artifact_name: schwasm-win-${{ github.sha::0:7 }}-release
+            artifact_name: schwasm-win-${{ github.sha }}-release
             binary_name: schwasm.exe
     steps:
       - name: checkout
