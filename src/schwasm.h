@@ -110,7 +110,7 @@ typedef Sp_Dynamic_Array(struct Schwasm_Node) Schwasm_Nodes;
 
 struct Schwasm {
     Sp_Lexer lexer;
-    Sp_Dynamic_Array(struct Schwasm_Node) nodes;
+    Schwasm_Nodes nodes;
     Sp_Bitset used_addrs;
     struct {
         size_t idx;
@@ -118,6 +118,7 @@ struct Schwasm {
     } lexer_attr;
     uint16_t addr; // GCPU uses a 4K ROM and 4K RAM, no more than 13 bits are required
     bool addr_valid;
+    bool addr_unsorted;
     const char *filename;
 };
 
@@ -134,6 +135,6 @@ SPExtern const Sp_Lexer_Token *schwasm_peek_token(struct Schwasm *schwasm);
 SPExtern const Sp_Lexer_Token *schwasm_next_token(struct Schwasm *schwasm);
 SPExtern enum Schwasm_Value_Type schwasm_expect_value(struct Schwasm *schwasm);
 
-SPExtern Schwasm_Nodes schwasm_generate_ir(struct Schwasm *schwasm);
+SPExtern void schwasm_generate_ir(struct Schwasm *schwasm);
 
 SPExtern void schwasm_destroy(struct Schwasm *schwasm);

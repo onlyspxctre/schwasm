@@ -159,8 +159,6 @@ static inline void org(struct Schwasm *schwasm) {
                 Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
                 sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%lX)\n", schwasm_file_arg(schwasm->filename, token_line), value);
             }
-
-            schwasm->addr = (uint16_t) value;
             break;
         case SCHWASM_VALUE_DECIMAL:
             value = (token = schwasm_get_token(schwasm))->int_lit.value;
@@ -168,11 +166,13 @@ static inline void org(struct Schwasm *schwasm) {
                 Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
                 sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (%ld)\n", schwasm_file_arg(schwasm->filename, token_line), value);
             }
-
-            schwasm->addr = (uint16_t) value;
             break;
     }
 
+    if (value < schwasm->addr) {
+        schwasm->addr_unsorted = true;
+    }
+    schwasm->addr = (uint16_t) value;
     schwasm->addr_valid = true;
 }
 
@@ -488,7 +488,7 @@ static inline void declare_directive(struct Schwasm *schwasm, enum Declare_Direc
     }
 }
 
-Schwasm_Nodes schwasm_generate_ir(struct Schwasm *schwasm) {
+void schwasm_generate_ir(struct Schwasm *schwasm) {
     Sp_Lexer_Return_Code code;
     while ((code = splexer_tokenize(&schwasm->lexer)) == SPLEXER_OK)
         ;
@@ -596,25 +596,4 @@ Schwasm_Nodes schwasm_generate_ir(struct Schwasm *schwasm) {
         prev = schwasm_get_token(schwasm);
         prev_line = splexer_token_get_line(&schwasm->lexer, prev);
     } while ((token = schwasm_next_token(schwasm)));
-
-    Schwasm_Nodes nodes = {0};
-    sp_da_reserve(&nodes, schwasm->nodes.count);
-
-    // pigeonhole sort
-    uint16_t ordered_idx[ADDR_LEN];
-    memset(ordered_idx, 0xFF, ADDR_LEN * sizeof(uint16_t)); // use 0xFFFF as sentinel value since valid addresses 0x0000 -> 0x1FFF (change if this ever changes)
-
-    for (uint16_t i = 0; i < schwasm->nodes.count; ++i) {
-        uint16_t a = schwasm->nodes.data[i].addr;
-        assert(ordered_idx[a] == 0xFFFF); // this should be enforced by uniqueness invariant
-
-        ordered_idx[a] = i;
-    }
-
-    for (uint16_t i = 0; i < ADDR_LEN; ++i) {
-        if (ordered_idx[i] == 0xFFFF) continue;
-        sp_da_push(&nodes, schwasm->nodes.data[ordered_idx[i]]);
-    }
-
-    return nodes;
 }
