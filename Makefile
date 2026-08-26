@@ -12,7 +12,7 @@ CC := clang
 CFLAGS := -Wall -Wextra -Wshadow -Winline -std=c11 -fcolor-diagnostics -I$(INCLUDEDIR)
 LDFLAGS := -fuse-ld=lld
 
-SPLEXER_VERSION := 0d5d84b
+SPLEXER_VERSION := 3b06958
 SPLEXER_FLAGS := GRANULAR_TOK_UNKNOWN=y NO_MULTICOMMENT=y
 
 ifneq ($(RELEASE),)
