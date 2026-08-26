@@ -1,36 +1,45 @@
 .PHONY: all clean depsclean
 
-BUILDDIR := $(abspath ./build)
+BUILDROOT := $(abspath ./build)
+LIBROOT := $(abspath ./lib)
+OBJROOT := $(abspath ./obj)
+
 DEPSDIR := $(abspath ./deps)
 SRCDIR := $(abspath ./src)
-OBJDIR := $(abspath ./obj)
 INCLUDEDIR := $(abspath ./include)
-LIBDIR := $(abspath ./lib)
 
 CC := clang
 CFLAGS := -Wall -Wextra -Wshadow -Winline -std=c11 -fcolor-diagnostics -I$(INCLUDEDIR)
 LDFLAGS := -fuse-ld=lld
 
-SPLEXER_VERSION := 1aeb2f8
+SPLEXER_VERSION := ca51b62
 SPLEXER_FLAGS := GRANULAR_TOK_UNKNOWN=y NO_MULTICOMMENT=y
-SPLEXER_STAMP := $(DEPSDIR)/.splexer-$(SPLEXER_VERSION).stamp
 
 ifneq ($(RELEASE),)
-CFLAGS += -O2 -flto -static
+CFLAGS += -O2 -flto -static -DNDEBUG
 SPLEXER_FLAGS += RELEASE=y
-BUILDDIR := $(abspath ./build/release)
+CONFIG := release
 else
 CFLAGS += -g
+CONFIG := debug
 endif
 
 ifneq ($(WINDOWS),)
-OBJDIR := $(abspath ./obj/win)
-
 CC +=  --target=x86_64-w64-mingw32 --sysroot=/usr/x86_64-w64-mingw32
 LDFLAGS += -L/usr/lib/gcc/x86_64-w64-mingw32/16.1.0 -DSP_STATIC
 LIBS := -l:libsplexer-win.a
 SPLEXER_FLAGS += WINDOWS=y
+CONFIG := win-$(CONFIG)
+else
+LIBS := -lsplexer
+endif
 
+BUILDDIR := $(BUILDROOT)/$(CONFIG)
+OBJDIR := $(OBJROOT)/$(CONFIG)
+LIBDIR := $(LIBROOT)/$(CONFIG)
+SPLEXER_STAMP := $(DEPSDIR)/.splexer-$(SPLEXER_VERSION)-$(CONFIG).stamp
+
+ifneq ($(WINDOWS),)
 all: $(BUILDDIR)/schwasm.exe
 
 $(BUILDDIR)/schwasm.exe: $(OBJDIR)/schwasm.o $(SRCDIR)/cli.c $(SRCDIR)/schwasm.c $(SRCDIR)/schwasm.h $(LIBDIR)/libsplexer-win.a $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
@@ -42,14 +51,12 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.c $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
 	$(CC) $(CFLAGS) -o $@ -DSP_STATIC -c $<
 
 $(LIBDIR)/libsplexer-win.a: $(SPLEXER_STAMP)
+	$(MAKE) -C $(DEPSDIR)/splexer clean
 	mkdir -p $(LIBDIR)
 	$(MAKE) -C $(DEPSDIR)/splexer $(SPLEXER_FLAGS) all
 	cp -f $(DEPSDIR)/splexer/build/libsplexer-win.a $@
 
 else
-
-LIBS := -lsplexer
-
 all: $(BUILDDIR)/schwasm
 
 $(BUILDDIR)/schwasm: $(OBJDIR)/schwasm.o $(SRCDIR)/cli.c $(SRCDIR)/schwasm.c $(SRCDIR)/schwasm.h $(LIBDIR)/libsplexer.so $(LIBDIR)/libsplexer.a $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
@@ -60,15 +67,13 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.c $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
 	mkdir -p $(OBJDIR)
 	$(CC) $(CFLAGS) -o $@ -c $<
 
-$(LIBDIR)/libsplexer.a: $(SPLEXER_STAMP)
+$(LIBDIR)/libsplexer.a $(LIBDIR)/libsplexer.so &: $(SPLEXER_STAMP)
+	$(MAKE) -C $(DEPSDIR)/splexer clean
 	mkdir -p $(LIBDIR)
 	$(MAKE) -C $(DEPSDIR)/splexer $(SPLEXER_FLAGS) all
-	cp -f $(DEPSDIR)/splexer/build/libsplexer.a $@
+	cp -f $(DEPSDIR)/splexer/build/libsplexer.a $(LIBDIR)/libsplexer.a
+	cp -f $(DEPSDIR)/splexer/build/libsplexer.so $(LIBDIR)/libsplexer.so
 
-$(LIBDIR)/libsplexer.so: $(SPLEXER_STAMP)
-	mkdir -p $(LIBDIR)
-	$(MAKE) -C $(DEPSDIR)/splexer $(SPLEXER_FLAGS) all
-	cp -f $(DEPSDIR)/splexer/build/libsplexer.so $@
 endif
 
 $(INCLUDEDIR)/sptl.h:
@@ -79,6 +84,7 @@ $(INCLUDEDIR)/splexer.h: $(SPLEXER_STAMP)
 	mkdir -p $(INCLUDEDIR)
 	cp -f $(DEPSDIR)/splexer/splexer.h $@
 
+# TODO: fetch halts the process, make it conditional
 $(SPLEXER_STAMP):
 	mkdir -p $(DEPSDIR)
 	test -d $(DEPSDIR)/splexer/.git || git clone https://github.com/onlyspxctre/splexer.git $(DEPSDIR)/splexer
@@ -87,10 +93,10 @@ $(SPLEXER_STAMP):
 	touch $@
 
 clean:
-	rm -rf $(BUILDDIR)
-	rm -rf $(OBJDIR)
+	rm -rf $(BUILDROOT)
+	rm -rf $(OBJROOT)
+	rm -rf $(LIBROOT)
 	rm -rf $(INCLUDEDIR)
-	rm -rf $(LIBDIR)
 	rm -rf *.mif
 
 depsclean:
