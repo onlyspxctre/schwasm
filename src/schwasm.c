@@ -410,10 +410,8 @@ enum Declare_Directive {
     DS_B
 };
 
-// TODO: Preprocessor directives with a period in their identifier is currently parsed as separate tokens.
-// This is because Splexer currently does not support periods in identifiers.
-// As a result, this means that something like "DC   .   B" with whitespace in the middle of the directive is completely valid.
-// We must fix this on the Splexer side; we will probably implement a compile flag that enables periods within identifier names.
+// Preprocessor directives with a period in their identifier are tokenized as separate tokens by Splexer.
+// As a downstream workaround, pointer contiguity is enforced below to disallow whitespace between DC/DS, '.', and 'B'.
 static inline void declare_directive(struct Schwasm *schwasm, enum Declare_Directive directive) {
     const Sp_Lexer_Token *prev = schwasm_get_token(schwasm);
     const Sp_Lexer_Token *token = schwasm_next_token(schwasm);
@@ -421,7 +419,7 @@ static inline void declare_directive(struct Schwasm *schwasm, enum Declare_Direc
     Sp_Lexer_Token_Line prev_line = splexer_token_get_line(&schwasm->lexer, prev);
     Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
 
-    if (!token || prev_line.line != token_line.line || token->type != TOK_Period) {
+    if (!token || prev_line.line != token_line.line || token->type != TOK_Period || prev->sv.ptr + prev->sv.count != token->sv.ptr) {
         sp_die(1, SCHWASM_FILE_FMT " Failed to parse assembly directive \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm->filename, prev_line), sp_sv_arg(prev->sv));
     }
 
@@ -430,7 +428,7 @@ static inline void declare_directive(struct Schwasm *schwasm, enum Declare_Direc
     prev_line = token_line;
     token_line = splexer_token_get_line(&schwasm->lexer, token);
 
-    if (!token || prev_line.line != token_line.line || !sp_sv_eq(&sp_cstr_slice("B"), &token->sv)) {
+    if (!token || prev_line.line != token_line.line || !sp_sv_eq(&sp_cstr_slice("B"), &token->sv) || prev->sv.ptr + prev->sv.count != token->sv.ptr) {
         sp_die(1, SCHWASM_FILE_FMT " Failed to parse assembly directive\n", schwasm_file_arg(schwasm->filename, prev_line));
     }
 
