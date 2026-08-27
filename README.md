@@ -10,13 +10,14 @@ Schwasm is designed according to the [**G-CPU Specification**](https://mil.ufl.e
 - Both decimal and hexadecimal (`$`) integer literals are supported.
 - Error reporting on line and column number
 - Depends entirely on in-house dependencies:
-    - `splexer` (lexer/tokenizer)
-    - `sptl.h`  (header-only stdlib)
+  - `splexer` (lexer/tokenizer)
+  - `sptl.h` (header-only stdlib)
 
 ### Supported Instructions
 
+
 | Mnemonic | Description                 |
-|----------|-----------------------------|
+| -------- | --------------------------- |
 | TAB      | Transfer register A to B    |
 | TBA      | Transfer register B to A    |
 | LDAA     | Load to register A (8-bit)  |
@@ -44,33 +45,39 @@ Schwasm is designed according to the [**G-CPU Specification**](https://mil.ufl.e
 | BN       | Branch if A < 0             |
 | BP       | Branch if A > 0             |
 
+
 ### Preprocessor Directives
 
-| Directive | Description                          |
-|-----------|--------------------------------------|
-| ORG       | Set addr for next instruction(s)     |
-| DC.B      | Define constant byte(s)              |
-| DS.B      | Define storage (reserve bytes in RAM)|
+
+| Directive | Description                           |
+| --------- | ------------------------------------- |
+| ORG       | Set addr for next instruction(s)      |
+| DC.B      | Define constant byte(s)               |
+| DS.B      | Define storage (reserve bytes in RAM) |
 
 
 ## Building
 
 To compile, simply run:
+
 ```bash
 make
 ```
 
 To build an optimized, statically linked release binary, run:
+
 ```bash
 make RELEASE=y
 ```
 
 To target Windows, run:
+
 ```bash
 make WINDOWS=y
 ```
 
 To clean everything up:
+
 ```bash
 make clean depsclean
 ```
@@ -84,5 +91,5 @@ Usage: ./schwasm <input.asm>
 The assembler reads assembly source and writes a `.mif`-format memory file to stdout.
 
 ## License
-This project is licensed under the [MIT License](LICENSE).
 
+This project is licensed under the [MIT License](LICENSE).
