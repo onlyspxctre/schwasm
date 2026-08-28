@@ -60,9 +60,9 @@ $(LIBDIR)/libsplexer-win.a: $(SPLEXER_STAMP)
 else
 all: $(BUILDDIR)/schwasm
 
-$(BUILDDIR)/schwasm: $(OBJDIR)/schwasm.o $(SRCDIR)/cli.c $(SRCDIR)/schwasm.c $(SRCDIR)/schwasm.h $(LIBDIR)/libsplexer.so $(LIBDIR)/libsplexer.a $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
+$(BUILDDIR)/schwasm: $(OBJDIR)/schwasm.o $(OBJDIR)/ir.o $(SRCDIR)/cli.c $(SRCDIR)/schwasm.c $(SRCDIR)/schwasm.h $(SRCDIR)/ir.c $(SRCDIR)/ir.h $(LIBDIR)/libsplexer.so $(LIBDIR)/libsplexer.a $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
 	mkdir -p $(BUILDDIR)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(SRCDIR)/cli.c $< -L$(LIBDIR) $(LIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(SRCDIR)/cli.c $(OBJDIR)/schwasm.o $(OBJDIR)/ir.o -L$(LIBDIR) $(LIBS)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
 	mkdir -p $(OBJDIR)

@@ -1,3 +1,6 @@
+#ifndef SCHWASM_H
+#define SCHWASM_H
+
 #include <splexer.h>
 #include <sptl.h>
 
@@ -112,6 +115,7 @@ struct Schwasm {
     Sp_Lexer lexer;
     Schwasm_Nodes nodes;
     Sp_Bitset used_addrs;
+    Sp_Hash_Table(Sp_String_View, long) equ_table;
     struct {
         size_t idx;
         bool busy;
@@ -138,3 +142,4 @@ extern enum Schwasm_Value_Type schwasm_expect_value(struct Schwasm *schwasm);
 extern void schwasm_generate_ir(struct Schwasm *schwasm);
 
 extern void schwasm_destroy(struct Schwasm *schwasm);
+#endif
