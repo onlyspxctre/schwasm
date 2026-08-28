@@ -19,14 +19,19 @@ void cleanup() {
 }
 
 static inline void gen_boilerplate(Sp_String_Builder *sb, const int size, const char *watermark) {
-    if (watermark) sp_sb_appendf(sb, "-- \t%s\t --\n", watermark);
+    if (watermark) {
+        sp_sb_append(sb, "-- \t");
+        sp_sb_append(sb, watermark);
+        sp_sb_append(sb, "\t--\n");
+    }
+
     sp_sb_appendf(sb, "DEPTH = %d;\n", size);
-    sp_sb_appendf(sb, "WIDTH = 8;\n\n");
+    sp_sb_append(sb, "WIDTH = 8;\n\n");
 
-    sp_sb_appendf(sb, "ADDRESS_RADIX = HEX;\n");
-    sp_sb_appendf(sb, "DATA_RADIX = HEX;\n\n");
+    sp_sb_append(sb, "ADDRESS_RADIX = HEX;\n");
+    sp_sb_append(sb, "DATA_RADIX = HEX;\n\n");
 
-    sp_sb_appendf(sb, "CONTENT\nBEGIN\n\n");
+    sp_sb_append(sb, "CONTENT\nBEGIN\n\n");
 }
 
 int main(int argc, char **argv) {
@@ -42,7 +47,7 @@ int main(int argc, char **argv) {
             }
             output_mode = OUTPUT_FILE;
             sp_da_clear(&output_dir);
-            sp_sb_appendf(&output_dir, "%s", argv[++i]);
+            sp_sb_append(&output_dir, argv[++i]);
         } else if (strcmp(argv[i], "-p") == 0) {
             if (output_mode == OUTPUT_FILE) {
                 sp_die(1, "-p: flag conflicts with -D\n");
@@ -160,8 +165,8 @@ int main(int argc, char **argv) {
         sp_sb_appendf(&ram_sb, "[%04X..%04X]\t:\t%02X;\n", ram_next_addr, 0x0FFF, 0x00);
     }
 
-    sp_sb_appendf(&rom_sb, "END;");
-    sp_sb_appendf(&ram_sb, "END;");
+    sp_sb_append(&rom_sb, "END;");
+    sp_sb_append(&ram_sb, "END;");
 
     FILE *rom;
     FILE *ram;
@@ -169,10 +174,13 @@ int main(int argc, char **argv) {
     Sp_String_Builder ram_path = {0};
     switch (output_mode) {
         case OUTPUT_NIL:
-            sp_sb_appendf(&output_dir, ".");
+            sp_sb_append(&output_dir, ".");
         case OUTPUT_FILE:
-            sp_sb_appendf(&rom_path, "%s/rom.mif", output_dir.data);
-            sp_sb_appendf(&ram_path, "%s/ram.mif", output_dir.data);
+            sp_sb_append(&rom_path, output_dir.data);
+            sp_sb_append(&rom_path, "/rom.mif");
+
+            sp_sb_append(&ram_path, output_dir.data);
+            sp_sb_append(&ram_path, "/ram.mif");
 
             rom = fopen(rom_path.data, "w");
 
@@ -211,7 +219,10 @@ int main(int argc, char **argv) {
             sp_da_free(&ram_path);
             break;
         case OUTPUT_PRINT:
-            printf("%s\n%s\n", rom_sb.data, ram_sb.data);
+            fputs(rom_sb.data, stdout);
+            fputc('\n', stdout);
+            fputs(ram_sb.data, stdout);
+            fputc('\n', stdout);
             break;
     }
 
