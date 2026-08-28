@@ -127,14 +127,14 @@ enum Schwasm_Value_Type {
     SCHWASM_VALUE_DECIMAL,
 };
 
-SPExtern struct Schwasm schwasm_init(const char *filename);
-SPExtern void schwasm_expect_org(struct Schwasm *schwasm);
-SPExtern void schwasm_create_node(struct Schwasm *schwasm, enum Schwasm_Op op, uint16_t dword);
-SPExtern const Sp_Lexer_Token *schwasm_get_token(struct Schwasm *schwasm);
-SPExtern const Sp_Lexer_Token *schwasm_peek_token(struct Schwasm *schwasm);
-SPExtern const Sp_Lexer_Token *schwasm_next_token(struct Schwasm *schwasm);
-SPExtern enum Schwasm_Value_Type schwasm_expect_value(struct Schwasm *schwasm);
+extern struct Schwasm schwasm_init(const char *filename);
+extern void schwasm_expect_org(struct Schwasm *schwasm);
+extern void schwasm_create_node(struct Schwasm *schwasm, enum Schwasm_Op op, uint16_t dword);
+extern const Sp_Lexer_Token *schwasm_get_token(struct Schwasm *schwasm);
+extern const Sp_Lexer_Token *schwasm_peek_token(struct Schwasm *schwasm);
+extern const Sp_Lexer_Token *schwasm_next_token(struct Schwasm *schwasm);
+extern enum Schwasm_Value_Type schwasm_expect_value(struct Schwasm *schwasm);
 
-SPExtern void schwasm_generate_ir(struct Schwasm *schwasm);
+extern void schwasm_generate_ir(struct Schwasm *schwasm);
 
-SPExtern void schwasm_destroy(struct Schwasm *schwasm);
+extern void schwasm_destroy(struct Schwasm *schwasm);
