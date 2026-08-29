@@ -491,6 +491,10 @@ __attribute__((constructor)) static void schwasm_dispatch_table_constructor(void
     sp_ht_insert(&schwasm_dispatch_table, sp_cstr_slice("EQU"), &equ);
 }
 
+__attribute__((destructor)) void schwasm_dispatcher_destructor(void) {
+    sp_ht_free(&schwasm_dispatch_table);
+}
+
 Schwasm_Dispatcher *schwasm_dispatcher_get(const char *str) {
     return schwasm_dispatcher_get_sv(sp_cstr_slice(str));
 }
