@@ -129,10 +129,13 @@ void schwasm_destroy(struct Schwasm *schwasm) {
     sp_ht_free(&schwasm->equ_table);
 }
 
+
+static inline void schwasm_generate_ir__loop(struct Schwasm *schwasm);
+
 void schwasm_generate_ir(struct Schwasm *schwasm) {
     Sp_Lexer_Return_Code code;
-    while ((code = splexer_tokenize(&schwasm->lexer)) == SPLEXER_OK)
-        ;
+    do {
+    } while ((code = splexer_tokenize(&schwasm->lexer)) == SPLEXER_OK);
 
     if (code == SPLEXER_ERROR) {
         if (schwasm->lexer.state == SPLEXER_STATE_MULTICOMMENT) {
@@ -142,6 +145,10 @@ void schwasm_generate_ir(struct Schwasm *schwasm) {
         }
     }
 
+    schwasm_generate_ir__loop(schwasm);
+}
+
+static inline void schwasm_generate_ir__loop(struct Schwasm *schwasm) {
     const Sp_Lexer_Token *prev = NULL;
     const Sp_Lexer_Token *token = schwasm_get_token(schwasm);
     Sp_Lexer_Token_Line prev_line = {0};
