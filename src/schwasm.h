@@ -4,6 +4,8 @@
 #include <splexer.h>
 #include <sptl.h>
 
+#include <stdbool.h>
+
 #define ADDR_END 0x1FFF
 #define ADDR_LEN 0x2000
 
@@ -50,7 +52,7 @@ enum Schwasm_Op {
     SCHWASM_OP_INX = 0x30,
     SCHWASM_OP_INY = 0x31,
     SCHWASM_AD_DC = 0x24,
-    SCHWASM_OP_UNKNOWN = 0x25,
+    SCHWASM_OP_UNKNOWN,
 };
 
 static const uint8_t SCHWASM_OP_COUNT[] = {
@@ -111,11 +113,17 @@ struct Schwasm_Node {
 
 typedef Sp_Dynamic_Array(struct Schwasm_Node) Schwasm_Nodes;
 
+struct Schwasm_Label_Entry {
+    bool defined;
+    Sp_Dynamic_Array(size_t) deferred_indices;
+    long value;
+};
+
 struct Schwasm {
     Sp_Lexer lexer;
     Schwasm_Nodes nodes;
     Sp_Bitset used_addrs;
-    Sp_Hash_Table(Sp_String_View, long) equ_table;
+    Sp_Hash_Table(Sp_String_View, struct Schwasm_Label_Entry) label_table;
     struct {
         size_t idx;
         bool busy;
@@ -129,11 +137,13 @@ struct Schwasm {
 enum Schwasm_Value_Type {
     SCHWASM_VALUE_HEX,
     SCHWASM_VALUE_DECIMAL,
+    SCHWASM_VALUE_LABEL
 };
 
 extern struct Schwasm schwasm_init(const char *filename);
 extern void schwasm_expect_org(struct Schwasm *schwasm);
-extern void schwasm_create_node(struct Schwasm *schwasm, enum Schwasm_Op op, uint16_t dword);
+extern struct Schwasm_Node *schwasm_create_node(struct Schwasm *schwasm, enum Schwasm_Op op, uint16_t dword);
+extern void schwasm_node_edit(struct Schwasm_Node* node, uint16_t dword);
 extern const Sp_Lexer_Token *schwasm_get_token(struct Schwasm *schwasm);
 extern const Sp_Lexer_Token *schwasm_peek_token(struct Schwasm *schwasm);
 extern const Sp_Lexer_Token *schwasm_next_token(struct Schwasm *schwasm);

@@ -39,7 +39,9 @@ static inline void ld_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
     }
 
     enum Schwasm_Op op;
-    long value;
+    long value = 0;
+    bool deferred = false;
+    sp_ht_node_t(&schwasm->label_table)* query = NULL;
     if (next->type == TOK_Pound) {   // immediate addressing
         schwasm_next_token(schwasm); // consume the TOK_Pound
 
@@ -65,25 +67,47 @@ static inline void ld_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
             case SCHWASM_VALUE_DECIMAL:
                 value = (token = schwasm_get_token(schwasm))->int_lit.value;
                 break;
+            case SCHWASM_VALUE_LABEL:
+                token = schwasm_get_token(schwasm);
+                sp_ht_get(&schwasm->label_table, token->sv, &query);
+
+                if (!query) {
+                    // TODO: dedicated function for label dependency
+                    sp_ht_insert(&schwasm->label_table, token->sv, ((struct Schwasm_Label_Entry) { .defined = false }));
+                    sp_ht_get(&schwasm->label_table, token->sv, &query);
+                    assert(query);
+                }
+
+                if (!query->value.defined) deferred = true;
+                else {
+                    value = query->value.value;
+                }
+                break;
         }
         token_line = splexer_token_get_line(&schwasm->lexer, token);
 
-        switch (reg) {
-            case GCPU_REGA:
-            case GCPU_REGB:
-                if (value > UINT8_MAX) {
-                    sp_die(1, SCHWASM_FILE_FMT " Value too large; register is 8-bits\n", schwasm_file_arg(schwasm->filename, token_line));
-                }
-                break;
-            case GCPU_REGX:
-            case GCPU_REGY:
-                if (value > UINT16_MAX) {
-                    sp_die(1, SCHWASM_FILE_FMT " Value too large; register is 16-bits\n", schwasm_file_arg(schwasm->filename, token_line));
-                }
-                break;
-        }
+        if (deferred) {
+            // TODO: currently deferred node edits skip bounds checking
+            schwasm_create_node(schwasm, op, (uint16_t) value);
+            sp_da_push(&query->value.deferred_indices, schwasm->nodes.count - 1);
+        } else {
+            switch (reg) {
+                case GCPU_REGA:
+                case GCPU_REGB:
+                    if (value > UINT8_MAX) {
+                        sp_die(1, SCHWASM_FILE_FMT " Value too large; register is 8-bits\n", schwasm_file_arg(schwasm->filename, token_line));
+                    }
+                    break;
+                case GCPU_REGX:
+                case GCPU_REGY:
+                    if (value > UINT16_MAX) {
+                        sp_die(1, SCHWASM_FILE_FMT " Value too large; register is 16-bits\n", schwasm_file_arg(schwasm->filename, token_line));
+                    }
+                    break;
+            }
 
-        schwasm_create_node(schwasm, op, (uint16_t) value);
+            schwasm_create_node(schwasm, op, (uint16_t) value);
+        }
     } else { // extended addressing
         switch (reg) {
             case GCPU_REGA:
@@ -106,6 +130,22 @@ static inline void ld_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
                 break;
             case SCHWASM_VALUE_DECIMAL:
                 value = (token = schwasm_get_token(schwasm))->int_lit.value;
+                break;
+            case SCHWASM_VALUE_LABEL:
+                token = schwasm_get_token(schwasm);
+                sp_ht_get(&schwasm->label_table, token->sv, &query);
+
+                if (!query) {
+                    // TODO: dedicated function for label dependency
+                    sp_ht_insert(&schwasm->label_table, token->sv, ((struct Schwasm_Label_Entry) { .defined = false }));
+                    sp_ht_get(&schwasm->label_table, token->sv, &query);
+                    assert(query);
+                }
+
+                if (!query->value.defined) deferred = true;
+                else {
+                    value = query->value.value;
+                }
                 break;
         }
 
@@ -147,18 +187,30 @@ static inline void ld_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
                 sp_die(1, SCHWASM_FILE_FMT " Unexpected address register \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm->filename, next_line), sp_sv_arg(next->sv));
             }
 
-            if (value > UINT8_MAX) {
-                sp_die(1, SCHWASM_FILE_FMT " Value too large; 8-bit displacement expected", schwasm_file_arg(schwasm->filename, token_line));
-            }
+            if (deferred) {
+                // TODO: currently deferred node edits skip bounds checking
+                schwasm_create_node(schwasm, op, (uint16_t) value);
+                sp_da_push(&query->value.deferred_indices, schwasm->nodes.count - 1);
+            } else {
+                if (value > UINT8_MAX) {
+                    sp_die(1, SCHWASM_FILE_FMT " Value too large; 8-bit displacement expected", schwasm_file_arg(schwasm->filename, token_line));
+                }
 
-            schwasm_create_node(schwasm, op, (uint16_t) value);
+                schwasm_create_node(schwasm, op, (uint16_t) value);
+            }
 
         } else {
-            if (value > ADDR_END) {
-                sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), value);
-            }
+            if (deferred) {
+                // TODO: currently deferred node edits skip bounds checking
+                schwasm_create_node(schwasm, op, (uint16_t) value);
+                sp_da_push(&query->value.deferred_indices, schwasm->nodes.count - 1);
+            } else {
+                if (value > ADDR_END) {
+                    sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), value);
+                }
 
-            schwasm_create_node(schwasm, op, (uint16_t) value);
+                schwasm_create_node(schwasm, op, (uint16_t) value);
+            }
         }
     }
 }
@@ -175,7 +227,9 @@ static inline void st_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
     }
 
     enum Schwasm_Op op;
-    long addr;
+    long addr = 0;
+    bool deferred = false;
+    sp_ht_node_t(&schwasm->label_table)* query = NULL;
 
     if (next->type == TOK_Pound) {
         sp_die(1, SCHWASM_FILE_FMT " Unexpected immediate value; store operations cannot be performed onto immediate value\n", schwasm_file_arg(schwasm->filename, next_line));
@@ -200,14 +254,36 @@ static inline void st_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
             case SCHWASM_VALUE_DECIMAL:
                 addr = (token = schwasm_get_token(schwasm))->int_lit.value;
                 break;
+            case SCHWASM_VALUE_LABEL:
+                token = schwasm_get_token(schwasm);
+                sp_ht_get(&schwasm->label_table, token->sv, &query);
+
+                if (!query) {
+                    // TODO: dedicated function for label dependency
+                    sp_ht_insert(&schwasm->label_table, token->sv, ((struct Schwasm_Label_Entry) { .defined = false }));
+                    sp_ht_get(&schwasm->label_table, token->sv, &query);
+                    assert(query);
+                }
+
+                if (!query->value.defined) deferred = true;
+                else {
+                    addr = query->value.value;
+                }
+                break;
         }
 
-        if (addr > ADDR_END) {
-            token_line = splexer_token_get_line(&schwasm->lexer, token);
-            sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), addr);
-        }
+        if (deferred) {
+            // TODO: currently deferred node edits skip bounds checking
+            schwasm_create_node(schwasm, op, (uint16_t) addr);
+            sp_da_push(&query->value.deferred_indices, schwasm->nodes.count - 1);
+        } else {
+            if (addr > ADDR_END) {
+                token_line = splexer_token_get_line(&schwasm->lexer, token);
+                sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), addr);
+            }
 
-        schwasm_create_node(schwasm, op, (uint16_t) addr);
+            schwasm_create_node(schwasm, op, (uint16_t) addr);
+        }
     }
 }
 static inline void branch_ex(struct Schwasm *schwasm, enum Schwasm_Op op) {
@@ -232,7 +308,10 @@ static inline void branch_ex(struct Schwasm *schwasm, enum Schwasm_Op op) {
         sp_die(1, SCHWASM_FILE_FMT " Expected rhs\n", schwasm_file_arg(schwasm->filename, token_line));
     }
 
-    long addr;
+    long addr = 0;
+    bool deferred = false;
+    sp_ht_node_t(&schwasm->label_table)* query = NULL;
+
     if (next->type == TOK_Pound) {
         sp_die(1, SCHWASM_FILE_FMT " Unexpected immediate value; branch operations require lower-order byte of addr\n", schwasm_file_arg(schwasm->filename, next_line));
     } else {
@@ -243,13 +322,35 @@ static inline void branch_ex(struct Schwasm *schwasm, enum Schwasm_Op op) {
             case SCHWASM_VALUE_DECIMAL:
                 addr = (token = schwasm_get_token(schwasm))->int_lit.value;
                 break;
+            case SCHWASM_VALUE_LABEL:
+                token = schwasm_get_token(schwasm);
+                sp_ht_get(&schwasm->label_table, token->sv, &query);
+
+                if (!query) {
+                    // TODO: dedicated function for label dependency
+                    sp_ht_insert(&schwasm->label_table, token->sv, ((struct Schwasm_Label_Entry) { .defined = false }));
+                    sp_ht_get(&schwasm->label_table, token->sv, &query);
+                    assert(query);
+                }
+
+                if (!query->value.defined) deferred = true;
+                else {
+                    addr = query->value.value;
+                }
+                break;
         }
 
-        if (addr > UINT8_MAX) {
-            sp_die(1, SCHWASM_FILE_FMT " Cannot branch to (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), addr);
-        }
+        if (deferred) {
+            // TODO: currently deferred node edits skip bounds checking
+            schwasm_create_node(schwasm, op, (uint16_t) addr);
+            sp_da_push(&query->value.deferred_indices, schwasm->nodes.count - 1);
+        } else {
+            if (addr > UINT8_MAX) {
+                sp_die(1, SCHWASM_FILE_FMT " Cannot branch to (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), addr);
+            }
 
-        schwasm_create_node(schwasm, op, (uint16_t) addr);
+            schwasm_create_node(schwasm, op, (uint16_t) addr);
+        }
     }
 }
 enum Declare_Directive {
@@ -278,7 +379,7 @@ static void d_ex(struct Schwasm *schwasm, enum Declare_Directive directive) {
         sp_die(1, SCHWASM_FILE_FMT " Failed to parse assembly directive\n", schwasm_file_arg(schwasm->filename, prev_line));
     }
 
-    long value;
+    long value = 0;
     switch (directive) {
         case DC_B:
         dc_loop:
@@ -297,6 +398,11 @@ static void d_ex(struct Schwasm *schwasm, enum Declare_Directive directive) {
                         sp_die(1, SCHWASM_FILE_FMT " Value too large; ROM word size is 8-bit\n", schwasm_file_arg(schwasm->filename, token_line));
                     }
                     break;
+                case SCHWASM_VALUE_LABEL:
+                    // TODO: should support rhs labels
+                    token_line = splexer_token_get_line(&schwasm->lexer, (token = schwasm_get_token(schwasm)));
+                    sp_die(1, SCHWASM_FILE_FMT " DC.B does not support rhs labels\n", schwasm_file_arg(schwasm->filename, token_line));
+                    break;
             }
             schwasm_create_node(schwasm, SCHWASM_AD_DC, (uint16_t) value);
 
@@ -311,10 +417,14 @@ static void d_ex(struct Schwasm *schwasm, enum Declare_Directive directive) {
             switch (schwasm_expect_value(schwasm)) {
                 case SCHWASM_VALUE_HEX:
                     value = parse_hex_or_die(schwasm, schwasm_get_token(schwasm));
-
                     break;
                 case SCHWASM_VALUE_DECIMAL:
                     value = schwasm_get_token(schwasm)->int_lit.value;
+                    break;
+                case SCHWASM_VALUE_LABEL:
+                    // TODO: should support rhs labels
+                    token_line = splexer_token_get_line(&schwasm->lexer, (token = schwasm_get_token(schwasm)));
+                    sp_die(1, SCHWASM_FILE_FMT " DS.B does not support rhs labels\n", schwasm_file_arg(schwasm->filename, token_line));
                     break;
             }
             token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
@@ -334,23 +444,28 @@ static void d_ex(struct Schwasm *schwasm, enum Declare_Directive directive) {
 
 static void org(struct Schwasm *schwasm, void *data) {
     (void) data;
-    long value;
+    long value = 0;
     const Sp_Lexer_Token *token;
+    Sp_Lexer_Token_Line token_line;
     switch (schwasm_expect_value(schwasm)) {
         case SCHWASM_VALUE_HEX:
             value = parse_hex_or_die(schwasm, (token = schwasm_get_token(schwasm)));
 
             if (token->sv.count + token->int_lit.suffixes.count > 4) { // exceeds 4 hex digits
-                Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+                token_line = splexer_token_get_line(&schwasm->lexer, token);
                 sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%lX)\n", schwasm_file_arg(schwasm->filename, token_line), value);
             }
             break;
         case SCHWASM_VALUE_DECIMAL:
             value = (token = schwasm_get_token(schwasm))->int_lit.value;
             if (value > UINT16_MAX) {
-                Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+                token_line = splexer_token_get_line(&schwasm->lexer, token);
                 sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (%ld)\n", schwasm_file_arg(schwasm->filename, token_line), value);
             }
+            break;
+        case SCHWASM_VALUE_LABEL:
+            token_line = splexer_token_get_line(&schwasm->lexer, (token = schwasm_get_token(schwasm)));
+            sp_die(1, SCHWASM_FILE_FMT " ORG does not support rhs labels\n", schwasm_file_arg(schwasm->filename, token_line));
             break;
     }
 
@@ -465,8 +580,16 @@ static void iny(struct Schwasm *schwasm, void *data) {
     schwasm_create_node(schwasm, SCHWASM_OP_INY, 0);
 }
 static void equ(struct Schwasm *schwasm, void *data) {
+    if (!data) {
+        // no lhs label was found
+        Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
+        sp_die(1, SCHWASM_FILE_FMT " EQU requires a label definition\n", schwasm_file_arg(schwasm->filename, token_line));
+    }
+    const Sp_String_View *label = (const Sp_String_View *) data;
+
     long value;
     const Sp_Lexer_Token *token;
+    Sp_Lexer_Token_Line token_line;
     switch (schwasm_expect_value(schwasm)) {
         case SCHWASM_VALUE_HEX:
             value = parse_hex_or_die(schwasm, (token = schwasm_get_token(schwasm)));
@@ -474,9 +597,33 @@ static void equ(struct Schwasm *schwasm, void *data) {
         case SCHWASM_VALUE_DECIMAL:
             value = (token = schwasm_get_token(schwasm))->int_lit.value;
             break;
+        case SCHWASM_VALUE_LABEL:
+            token_line = splexer_token_get_line(&schwasm->lexer, (token = schwasm_get_token(schwasm)));
+            sp_die(1, SCHWASM_FILE_FMT " EQU does not support rhs labels\n", schwasm_file_arg(schwasm->filename, token_line));
+            break;
     }
-    // TODO: insert into equ_table
-    (void) value;
+
+    // TODO: dedicated function for label definitions
+    sp_ht_node_t(&schwasm->label_table)* query = NULL;
+    sp_ht_get(&schwasm->label_table, *label, &query);
+
+    if (query) {
+        if (query->value.defined) {
+            token_line = splexer_token_get_line(&schwasm->lexer, token);
+            sp_die(1, SCHWASM_FILE_FMT " Cannot redefine label \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm->filename, token_line), sp_sv_arg(*label));
+        }
+
+        for (size_t i = 0; i < query->value.deferred_indices.count; ++i) {
+            schwasm_node_edit(&schwasm->nodes.data[query->value.deferred_indices.data[i]], (uint16_t) value);
+        }
+        sp_da_free(&query->value.deferred_indices);
+        query->value.deferred_indices.count = 0;
+        query->value.deferred_indices.capacity = 0;
+        query->value.defined = true;
+        query->value.value = value;
+    } else {
+        sp_ht_insert(&schwasm->label_table, *label, ((struct Schwasm_Label_Entry) {.defined = true, .value = value}));
+    }
 }
 static void dc_b(struct Schwasm *schwasm, void *data) {
     (void) data;

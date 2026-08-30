@@ -22,7 +22,7 @@ void schwasm_expect_org(struct Schwasm *schwasm) {
     }
 }
 
-void schwasm_create_node(struct Schwasm *schwasm, enum Schwasm_Op op, uint16_t dword) {
+struct Schwasm_Node *schwasm_create_node(struct Schwasm *schwasm, enum Schwasm_Op op, uint16_t dword) {
     schwasm_expect_org(schwasm);
 
     struct Schwasm_Node node = (struct Schwasm_Node) {
@@ -46,23 +46,28 @@ void schwasm_create_node(struct Schwasm *schwasm, enum Schwasm_Op op, uint16_t d
         ++schwasm->addr;
     }
 
-    switch (SCHWASM_OP_COUNT[op]) {
+    schwasm_node_edit(&node, dword);
+    sp_da_push(&schwasm->nodes, node);
+
+    return &schwasm->nodes.data[schwasm->nodes.count - 1];
+}
+
+inline void schwasm_node_edit(struct Schwasm_Node *node, uint16_t dword) {
+    switch (SCHWASM_OP_COUNT[node->op]) {
         case 0:
-            node.dword = dword;
+            node->dword = dword;
             break;
         case 1:
         case 2:
-            node.word = (uint8_t) dword;
+            node->word = (uint8_t) dword;
             break;
         case 3:
-            node.lword = (uint8_t) dword;
-            node.hword = (uint8_t) (dword >> 8);
+            node->lword = (uint8_t) dword;
+            node->hword = (uint8_t) (dword >> 8);
             break;
         default:
             sp_unreachable();
     }
-
-    sp_da_push(&schwasm->nodes, node);
 }
 
 const Sp_Lexer_Token *schwasm_get_token(struct Schwasm *schwasm) {
@@ -118,6 +123,8 @@ enum Schwasm_Value_Type schwasm_expect_value(struct Schwasm *schwasm) {
         return SCHWASM_VALUE_HEX;
     } else if (token->type == TOK_IntLiteral) {
         return SCHWASM_VALUE_DECIMAL;
+    } else if (token->type == TOK_ID) {
+        return SCHWASM_VALUE_LABEL;
     } else {
         sp_die(1, SCHWASM_FILE_FMT " Unexpected value\n", schwasm_file_arg(schwasm->filename, prev_line));
         return 1;
@@ -125,10 +132,19 @@ enum Schwasm_Value_Type schwasm_expect_value(struct Schwasm *schwasm) {
 }
 
 void schwasm_destroy(struct Schwasm *schwasm) {
+    for (size_t i = 0; i < schwasm->label_table.table.count; ++i) {
+        for (size_t j = 0; j < schwasm->label_table.table.data[i].count; ++j) {
+            if (schwasm->label_table.table.data[i].data[j].key.count != 0) {
+                if (!schwasm->label_table.table.data[i].data[j].value.defined) {
+                    sp_die(1, "Undefined label: \"" SP_SV_FMT "\"\n", sp_sv_arg(schwasm->label_table.table.data[i].data[j].key));
+                }
+            }
+        }
+    }
     splexer_destroy(&schwasm->lexer);
-    sp_bitset_free(&schwasm->used_addrs);
     sp_da_free(&schwasm->nodes);
-    sp_ht_free(&schwasm->equ_table);
+    sp_ht_free(&schwasm->label_table);
+    sp_bitset_free(&schwasm->used_addrs);
 }
 
 static inline void schwasm_generate_ir__loop(struct Schwasm *schwasm);
@@ -183,7 +199,44 @@ static inline void schwasm_generate_ir__loop(struct Schwasm *schwasm) {
 
         Schwasm_Dispatcher *dispatcher = schwasm_dispatcher_get_sv(token->sv);
         if (!dispatcher) {
-            sp_die(1, SCHWASM_FILE_FMT " Failed to parse unknown instruction \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm->filename, token_line), sp_sv_arg(token->sv));
+            const Sp_Lexer_Token *peek = schwasm_peek_token(schwasm);
+            Sp_Lexer_Token_Line peek_line = splexer_token_get_line(&schwasm->lexer, peek);
+
+            if (!peek || peek->type != TOK_ID || token_line.line != peek_line.line || !(dispatcher = schwasm_dispatcher_get_sv(peek->sv))) {
+                sp_die(1, SCHWASM_FILE_FMT " Failed to parse unknown instruction \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm->filename, token_line), sp_sv_arg(token->sv));
+            }
+
+            if (sp_sv_eq(&peek->sv, &sp_cstr_slice("ORG"))) {
+                sp_die(1, SCHWASM_FILE_FMT " Preceding label on ORG disallowed\n", schwasm_file_arg(schwasm->filename, token_line));
+            }
+
+            // TODO: dedicated function for label definitions
+            if (!sp_sv_eq(&peek->sv, &sp_cstr_slice("EQU"))) {
+                sp_ht_node_t(&schwasm->label_table)* query = NULL;
+                sp_ht_get(&schwasm->label_table, token->sv, &query);
+
+                if (query) {
+                    if (query->value.defined) {
+                        token_line = splexer_token_get_line(&schwasm->lexer, token);
+                        sp_die(1, SCHWASM_FILE_FMT " Cannot redefine label \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm->filename, token_line), sp_sv_arg(token->sv));
+                    }
+                    for (size_t i = 0; i < query->value.deferred_indices.count; ++i) {
+                        schwasm_node_edit(&schwasm->nodes.data[query->value.deferred_indices.data[i]], schwasm->addr);
+                    }
+                    sp_da_free(&query->value.deferred_indices);
+                    query->value.deferred_indices.count = 0;
+                    query->value.deferred_indices.capacity = 0;
+                    query->value.defined = true;
+                    query->value.value = schwasm->addr;
+                } else {
+                    sp_ht_insert(&schwasm->label_table, token->sv, ((struct Schwasm_Label_Entry) {.defined = true, .value = schwasm->addr}));
+                }
+            } else {
+                // The behavior of EQU is dispatched via Schwasm_Dispatcher. We send the `String_View` to the `EQU` dispatcher
+                data = (void *) &token->sv;
+            }
+
+            schwasm_next_token(schwasm); // consume away the current token (label)
         }
 
         dispatcher(schwasm, data);
