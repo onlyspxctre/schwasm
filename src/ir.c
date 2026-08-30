@@ -332,7 +332,8 @@ static void d_ex(struct Schwasm *schwasm, enum Declare_Directive directive) {
     }
 }
 
-static void org(struct Schwasm *schwasm) {
+static void org(struct Schwasm *schwasm, void *data) {
+    (void) data;
     long value;
     const Sp_Lexer_Token *token;
     switch (schwasm_expect_value(schwasm)) {
@@ -359,85 +360,111 @@ static void org(struct Schwasm *schwasm) {
     schwasm->addr = (uint16_t) value;
     schwasm->addr_valid = true;
 }
-static void tab(struct Schwasm *schwasm) {
+static void tab(struct Schwasm *schwasm, void *data) {
+    (void) data;
     schwasm_create_node(schwasm, SCHWASM_OP_TAB, 0);
 }
-static void tba(struct Schwasm *schwasm) {
+static void tba(struct Schwasm *schwasm, void *data) {
+    (void) data;
     schwasm_create_node(schwasm, SCHWASM_OP_TBA, 0);
 }
-static void ldaa(struct Schwasm *schwasm) {
+static void ldaa(struct Schwasm *schwasm, void *data) {
+    (void) data;
     ld_ex(schwasm, GCPU_REGA);
 }
-static void ldab(struct Schwasm *schwasm) {
+static void ldab(struct Schwasm *schwasm, void *data) {
+    (void) data;
     ld_ex(schwasm, GCPU_REGB);
 }
-static void ldx(struct Schwasm *schwasm) {
+static void ldx(struct Schwasm *schwasm, void *data) {
+    (void) data;
     ld_ex(schwasm, GCPU_REGX);
 }
-static void ldy(struct Schwasm *schwasm) {
+static void ldy(struct Schwasm *schwasm, void *data) {
+    (void) data;
     ld_ex(schwasm, GCPU_REGY);
 }
-static void staa(struct Schwasm *schwasm) {
+static void staa(struct Schwasm *schwasm, void *data) {
+    (void) data;
     st_ex(schwasm, GCPU_REGA);
 }
-static void stab(struct Schwasm *schwasm) {
+static void stab(struct Schwasm *schwasm, void *data) {
+    (void) data;
     st_ex(schwasm, GCPU_REGB);
 }
-static void sum_ba(struct Schwasm *schwasm) {
+static void sum_ba(struct Schwasm *schwasm, void *data) {
+    (void) data;
     schwasm_create_node(schwasm, SCHWASM_OP_SUM_BA, 0);
 }
-static void sum_ab(struct Schwasm *schwasm) {
+static void sum_ab(struct Schwasm *schwasm, void *data) {
+    (void) data;
     schwasm_create_node(schwasm, SCHWASM_OP_SUM_AB, 0);
 }
-static void and_ba(struct Schwasm *schwasm) {
+static void and_ba(struct Schwasm *schwasm, void *data) {
+    (void) data;
     schwasm_create_node(schwasm, SCHWASM_OP_AND_BA, 0);
 }
-static void and_ab(struct Schwasm *schwasm) {
+static void and_ab(struct Schwasm *schwasm, void *data) {
+    (void) data;
     schwasm_create_node(schwasm, SCHWASM_OP_AND_AB, 0);
 }
-static void or_ba(struct Schwasm *schwasm) {
+static void or_ba(struct Schwasm *schwasm, void *data) {
+    (void) data;
     schwasm_create_node(schwasm, SCHWASM_OP_OR_BA, 0);
 }
-static void or_ab(struct Schwasm *schwasm) {
+static void or_ab(struct Schwasm *schwasm, void *data) {
+    (void) data;
     schwasm_create_node(schwasm, SCHWASM_OP_OR_AB, 0);
 }
-static void coma(struct Schwasm *schwasm) {
+static void coma(struct Schwasm *schwasm, void *data) {
+    (void) data;
     schwasm_create_node(schwasm, SCHWASM_OP_COMA, 0);
 }
-static void comb(struct Schwasm *schwasm) {
+static void comb(struct Schwasm *schwasm, void *data) {
+    (void) data;
     schwasm_create_node(schwasm, SCHWASM_OP_COMB, 0);
 }
-static void shfa_l(struct Schwasm *schwasm) {
+static void shfa_l(struct Schwasm *schwasm, void *data) {
+    (void) data;
     schwasm_create_node(schwasm, SCHWASM_OP_SHFA_L, 0);
 }
-static void shfa_r(struct Schwasm *schwasm) {
+static void shfa_r(struct Schwasm *schwasm, void *data) {
+    (void) data;
     schwasm_create_node(schwasm, SCHWASM_OP_SHFA_R, 0);
 }
-static void shfb_l(struct Schwasm *schwasm) {
+static void shfb_l(struct Schwasm *schwasm, void *data) {
+    (void) data;
     schwasm_create_node(schwasm, SCHWASM_OP_SHFB_L, 0);
 }
-static void shfb_r(struct Schwasm *schwasm) {
+static void shfb_r(struct Schwasm *schwasm, void *data) {
+    (void) data;
     schwasm_create_node(schwasm, SCHWASM_OP_SHFB_R, 0);
 }
-static void beq(struct Schwasm *schwasm) {
+static void beq(struct Schwasm *schwasm, void *data) {
+    (void) data;
     branch_ex(schwasm, SCHWASM_OP_BEQ);
 }
-static void bne(struct Schwasm *schwasm) {
+static void bne(struct Schwasm *schwasm, void *data) {
+    (void) data;
     branch_ex(schwasm, SCHWASM_OP_BNE);
 }
-static void bn(struct Schwasm *schwasm) {
+static void bn(struct Schwasm *schwasm, void *data) {
+    (void) data;
     branch_ex(schwasm, SCHWASM_OP_BN);
 }
-static void bp(struct Schwasm *schwasm) {
+static void bp(struct Schwasm *schwasm, void *data) {
+    (void) data;
     branch_ex(schwasm, SCHWASM_OP_BP);
 }
-static void inx(struct Schwasm *schwasm) {
+static void inx(struct Schwasm *schwasm, void *data) {
+    (void) data;
     schwasm_create_node(schwasm, SCHWASM_OP_INX, 0);
 }
-static void iny(struct Schwasm *schwasm) {
+static void iny(struct Schwasm *schwasm, void *data) {
+    (void) data;
     schwasm_create_node(schwasm, SCHWASM_OP_INY, 0);
 }
-static void equ(struct Schwasm *schwasm) {
+static void equ(struct Schwasm *schwasm, void *data) {
     long value;
     const Sp_Lexer_Token *token;
     switch (schwasm_expect_value(schwasm)) {
@@ -451,10 +478,12 @@ static void equ(struct Schwasm *schwasm) {
     // TODO: insert into equ_table
     (void) value;
 }
-static void dc_b(struct Schwasm *schwasm) {
+static void dc_b(struct Schwasm *schwasm, void *data) {
+    (void) data;
     d_ex(schwasm, DC_B);
 }
-static void ds_b(struct Schwasm *schwasm) {
+static void ds_b(struct Schwasm *schwasm, void *data) {
+    (void) data;
     d_ex(schwasm, DS_B);
 }
 

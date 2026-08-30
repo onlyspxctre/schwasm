@@ -1,6 +1,8 @@
 #include "schwasm.h"
 #include "ir.h"
+
 #include <assert.h>
+#include <sptl.h>
 
 struct Schwasm schwasm_init(const char *filename) {
     struct Schwasm schwasm = {
@@ -129,7 +131,6 @@ void schwasm_destroy(struct Schwasm *schwasm) {
     sp_ht_free(&schwasm->equ_table);
 }
 
-
 static inline void schwasm_generate_ir__loop(struct Schwasm *schwasm);
 
 void schwasm_generate_ir(struct Schwasm *schwasm) {
@@ -153,6 +154,7 @@ static inline void schwasm_generate_ir__loop(struct Schwasm *schwasm) {
     const Sp_Lexer_Token *token = schwasm_get_token(schwasm);
     Sp_Lexer_Token_Line prev_line = {0};
     Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, token);
+    void *data = NULL;
 
     if (!token) {
         sp_die(1, SCHWASM_FILE_FMT " Unexpected initial token\n", schwasm_file_arg(schwasm->filename, ((Sp_Lexer_Token_Line) {
@@ -184,7 +186,7 @@ static inline void schwasm_generate_ir__loop(struct Schwasm *schwasm) {
             sp_die(1, SCHWASM_FILE_FMT " Failed to parse unknown instruction \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm->filename, token_line), sp_sv_arg(token->sv));
         }
 
-        dispatcher(schwasm);
+        dispatcher(schwasm, data);
 
         prev = schwasm_get_token(schwasm);
         prev_line = splexer_token_get_line(&schwasm->lexer, prev);
