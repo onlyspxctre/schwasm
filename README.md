@@ -9,6 +9,8 @@ Schwasm is designed according to the [**G-CPU Specification**](https://mil.ufl.e
 - Direct, extended, and immediate addressing into the **4kx8 ROM** and **4kx8 RAM**.
 - Both decimal and hexadecimal (`$`) integer literals are supported.
 - Error reporting on line and column number
+- Labels and `EQU` (akin to `#include`)
+    - Supports backward referencing (label definition after usage)
 - Depends entirely on in-house dependencies:
   - `splexer` (lexer/tokenizer)
   - `sptl.h` (header-only stdlib)
@@ -54,6 +56,7 @@ Schwasm is designed according to the [**G-CPU Specification**](https://mil.ufl.e
 | ORG       | Set addr for next instruction(s)      |
 | DC.B      | Define constant byte(s)               |
 | DS.B      | Define storage (reserve bytes in RAM) |
+| EQU       | Label definition                      |
 
 
 ## Building
