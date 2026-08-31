@@ -132,13 +132,13 @@ enum Schwasm_Value_Type schwasm_expect_value(struct Schwasm *schwasm) {
 }
 
 void schwasm_destroy(struct Schwasm *schwasm) {
-    for (size_t i = 0; i < schwasm->label_table.table.count; ++i) {
-        for (size_t j = 0; j < schwasm->label_table.table.data[i].count; ++j) {
-            if (schwasm->label_table.table.data[i].data[j].key.count != 0) {
-                if (!schwasm->label_table.table.data[i].data[j].value.defined) {
-                    sp_die(1, "Undefined label: \"" SP_SV_FMT "\"\n", sp_sv_arg(schwasm->label_table.table.data[i].data[j].key));
-                }
-            }
+    for (size_t i = 0; i < schwasm->label_table.capacity; ++i) {
+        if (schwasm->label_table.psls[i] == SP_HT_PSL_SENTINEL) {
+            continue;
+        }
+
+        if (!schwasm->label_table.buckets[i].value.defined) {
+            sp_die(1, "Undefined label: \"" SP_SV_FMT "\"\n", sp_sv_arg(schwasm->label_table.buckets[i].key));
         }
     }
     splexer_destroy(&schwasm->lexer);

@@ -16,8 +16,12 @@ SRCS := cli.c schwasm.c ir.c
 OBJS := $(SRCS:%.c=%.o)
 HEADERS := schwasm.h ir.h
 
-SPLEXER_VERSION := 3b06958
+SPLEXER_VERSION := 44b5485
 SPLEXER_FLAGS := GRANULAR_TOK_UNKNOWN=y NO_MULTICOMMENT=y
+SPLEXER_DIR := $(DEPSDIR)/splexer-$(SPLEXER_VERSION)
+
+SPTL_VERSION := dc90d34
+SPTL_DIR := $(DEPSDIR)/sptl.h-$(SPTL_VERSION)
 
 ifneq ($(RELEASE),)
 CFLAGS += -O2 -flto -static -DNDEBUG
@@ -42,7 +46,6 @@ endif
 BUILDDIR := $(BUILDROOT)/$(CONFIG)
 OBJDIR := $(OBJROOT)/$(CONFIG)
 LIBDIR := $(LIBROOT)/$(CONFIG)
-SPLEXER_STAMP := $(DEPSDIR)/.splexer-$(SPLEXER_VERSION)-$(CONFIG).stamp
 
 ifneq ($(WINDOWS),)
 all: $(BUILDDIR)/schwasm.exe
@@ -55,11 +58,11 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.c $(HEADERS:%=$(SRCDIR)/%) $(INCLUDEDIR)/sptl.h $(INC
 	mkdir -p $(OBJDIR)
 	$(CC) $(CFLAGS) -o $@ -DSP_STATIC -c $<
 
-$(LIBDIR)/libsplexer-win.a: $(SPLEXER_STAMP)
-	$(MAKE) -C $(DEPSDIR)/splexer clean
+$(LIBDIR)/libsplexer-win.a: $(SPLEXER_DIR).tar.gz
+	$(MAKE) -C $(SPLEXER_DIR) clean
 	mkdir -p $(LIBDIR)
-	$(MAKE) -C $(DEPSDIR)/splexer $(SPLEXER_FLAGS) all
-	cp -f $(DEPSDIR)/splexer/build/libsplexer-win.a $@
+	$(MAKE) -C $(SPLEXER_DIR) $(SPLEXER_FLAGS) all
+	cp -f $(SPLEXER_DIR)/build/libsplexer-win.a $@
 
 else
 all: $(BUILDDIR)/schwasm
@@ -72,30 +75,32 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.c $(HEADERS:%=$(SRCDIR)/%) $(INCLUDEDIR)/sptl.h $(INC
 	mkdir -p $(OBJDIR)
 	$(CC) $(CFLAGS) -o $@ -c $<
 
-$(LIBDIR)/libsplexer.a $(LIBDIR)/libsplexer.so &: $(SPLEXER_STAMP)
-	$(MAKE) -C $(DEPSDIR)/splexer clean
+$(LIBDIR)/libsplexer.a $(LIBDIR)/libsplexer.so &: $(SPLEXER_DIR).tar.gz
+	$(MAKE) -C $(SPLEXER_DIR) clean
 	mkdir -p $(LIBDIR)
-	$(MAKE) -C $(DEPSDIR)/splexer $(SPLEXER_FLAGS) all
-	cp -f $(DEPSDIR)/splexer/build/libsplexer.a $(LIBDIR)/libsplexer.a
-	cp -f $(DEPSDIR)/splexer/build/libsplexer.so $(LIBDIR)/libsplexer.so
+	$(MAKE) -C $(SPLEXER_DIR) $(SPLEXER_FLAGS) all
+	cp -f $(SPLEXER_DIR)/build/libsplexer.a $(LIBDIR)/libsplexer.a
+	cp -f $(SPLEXER_DIR)/build/libsplexer.so $(LIBDIR)/libsplexer.so
 
 endif
 
-$(INCLUDEDIR)/sptl.h:
+$(INCLUDEDIR)/splexer.h: $(SPLEXER_DIR).tar.gz
 	mkdir -p $(INCLUDEDIR)
-	cd $(INCLUDEDIR) && curl -O https://raw.githubusercontent.com/onlyspxctre/sptl.h/refs/heads/master/sptl.h
+	cp $(SPLEXER_DIR)/splexer.h $@
 
-$(INCLUDEDIR)/splexer.h: $(SPLEXER_STAMP)
+$(INCLUDEDIR)/sptl.h: $(SPTL_DIR).tar.gz
 	mkdir -p $(INCLUDEDIR)
-	cp -f $(DEPSDIR)/splexer/splexer.h $@
+	cp $(SPTL_DIR)/sptl.h $@
 
-# TODO: fetch halts the process, make it conditional
-$(SPLEXER_STAMP):
-	mkdir -p $(DEPSDIR)
-	test -d $(DEPSDIR)/splexer/.git || git clone https://github.com/onlyspxctre/splexer.git $(DEPSDIR)/splexer
-	-git -C $(DEPSDIR)/splexer fetch --tags
-	cd $(DEPSDIR)/splexer && git checkout $(SPLEXER_VERSION)
-	touch $@
+$(SPLEXER_DIR).tar.gz:
+	mkdir -p $(SPLEXER_DIR)
+	curl -fsSL -o $(SPLEXER_DIR).tar.gz https://github.com/onlyspxctre/splexer/archive/$(SPLEXER_VERSION).tar.gz
+	tar xf $(SPLEXER_DIR).tar.gz -C $(SPLEXER_DIR) --strip-components=1
+
+$(SPTL_DIR).tar.gz:
+	mkdir -p $(SPTL_DIR)
+	curl -fsSL -o $(SPTL_DIR).tar.gz https://github.com/onlyspxctre/sptl.h/archive/$(SPTL_VERSION).tar.gz
+	tar xf $(SPTL_DIR).tar.gz -C $(SPTL_DIR) --strip-components=1
 
 clean:
 	rm -rf $(BUILDROOT)
