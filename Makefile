@@ -12,6 +12,10 @@ CC := clang
 CFLAGS := -Wall -Wextra -Wshadow -Winline -std=c11 -fcolor-diagnostics -I$(INCLUDEDIR)
 LDFLAGS := -fuse-ld=lld
 
+SRCS := cli.c schwasm.c ir.c
+OBJS := $(SRCS:%.c=%.o)
+HEADERS := schwasm.h ir.h
+
 SPLEXER_VERSION := 3b06958
 SPLEXER_FLAGS := GRANULAR_TOK_UNKNOWN=y NO_MULTICOMMENT=y
 
@@ -20,14 +24,14 @@ CFLAGS += -O2 -flto -static -DNDEBUG
 SPLEXER_FLAGS += RELEASE=y
 CONFIG := release
 else
-CFLAGS += -g
+CFLAGS += -g3
 CONFIG := debug
 endif
 
 ifneq ($(WINDOWS),)
 OBJDIR := $(abspath ./obj/win)
 
-CC +=  --target=x86_64-w64-mingw32 -DSP_STATIC
+CC += --target=x86_64-w64-mingw32 -DSP_STATIC
 LIBS := -l:libsplexer-win.a
 SPLEXER_FLAGS += WINDOWS=y
 CONFIG := win-$(CONFIG)
@@ -43,11 +47,11 @@ SPLEXER_STAMP := $(DEPSDIR)/.splexer-$(SPLEXER_VERSION)-$(CONFIG).stamp
 ifneq ($(WINDOWS),)
 all: $(BUILDDIR)/schwasm.exe
 
-$(BUILDDIR)/schwasm.exe: $(OBJDIR)/schwasm.o $(SRCDIR)/cli.c $(SRCDIR)/schwasm.c $(SRCDIR)/schwasm.h $(LIBDIR)/libsplexer-win.a $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
+$(BUILDDIR)/schwasm.exe: $(OBJS:%=$(OBJDIR)/%) $(LIBDIR)/libsplexer-win.a
 	mkdir -p $(BUILDDIR)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(SRCDIR)/cli.c $< -L$(LIBDIR) $(LIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJS:%=$(OBJDIR)/%) -L$(LIBDIR) $(LIBS)
 
-$(OBJDIR)/%.o: $(SRCDIR)/%.c $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
+$(OBJDIR)/%.o: $(SRCDIR)/%.c $(HEADERS:%=$(SRCDIR)/%) $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
 	mkdir -p $(OBJDIR)
 	$(CC) $(CFLAGS) -o $@ -DSP_STATIC -c $<
 
@@ -60,11 +64,11 @@ $(LIBDIR)/libsplexer-win.a: $(SPLEXER_STAMP)
 else
 all: $(BUILDDIR)/schwasm
 
-$(BUILDDIR)/schwasm: $(OBJDIR)/schwasm.o $(OBJDIR)/ir.o $(SRCDIR)/cli.c $(SRCDIR)/schwasm.c $(SRCDIR)/schwasm.h $(SRCDIR)/ir.c $(SRCDIR)/ir.h $(LIBDIR)/libsplexer.so $(LIBDIR)/libsplexer.a $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
+$(BUILDDIR)/schwasm: $(OBJS:%=$(OBJDIR)/%) $(LIBDIR)/libsplexer.so $(LIBDIR)/libsplexer.a
 	mkdir -p $(BUILDDIR)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(SRCDIR)/cli.c $(OBJDIR)/schwasm.o $(OBJDIR)/ir.o -L$(LIBDIR) $(LIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(OBJS:%=$(OBJDIR)/%) -L$(LIBDIR) $(LIBS)
 
-$(OBJDIR)/%.o: $(SRCDIR)/%.c $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
+$(OBJDIR)/%.o: $(SRCDIR)/%.c $(HEADERS:%=$(SRCDIR)/%) $(INCLUDEDIR)/sptl.h $(INCLUDEDIR)/splexer.h
 	mkdir -p $(OBJDIR)
 	$(CC) $(CFLAGS) -o $@ -c $<
 
