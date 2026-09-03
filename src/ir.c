@@ -268,11 +268,12 @@ static inline void branch_ex(struct Schwasm *schwasm, enum Schwasm_Op op) {
         sp_die(1, SCHWASM_FILE_FMT " Unexpected immediate value; branch operations require lower-order byte of addr\n", schwasm_file_arg(schwasm->filename, next_line));
     } else {
         schwasm_ir_expect_value_macro(schwasm, token, addr, query, deferred);
+        token_line = splexer_token_get_line(&schwasm->lexer, token);
 
         if (deferred) {
             // TODO: currently deferred node edits skip bounds checking
             schwasm_create_node(schwasm, op, (uint16_t) addr);
-            sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer) {.index = schwasm->nodes.count - 1, .token_line = splexer_token_get_line(&schwasm->lexer, token)}));
+            sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer) {.index = schwasm->nodes.count - 1, .token_line = token_line }));
         } else {
             if (addr > UINT8_MAX) {
                 sp_die(1, SCHWASM_FILE_FMT " Cannot branch to (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), addr);
@@ -514,7 +515,7 @@ static void equ(struct Schwasm *schwasm, void *data) {
         Sp_Lexer_Token_Line token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
         sp_die(1, SCHWASM_FILE_FMT " EQU requires a label definition\n", schwasm_file_arg(schwasm->filename, token_line));
     }
-    const Sp_String_View *label = (const Sp_String_View *) data;
+    const Sp_Lexer_Token *label_token = (const Sp_Lexer_Token *) data;
 
     long value = 0;
     const Sp_Lexer_Token *token;
@@ -532,9 +533,9 @@ static void equ(struct Schwasm *schwasm, void *data) {
             break;
     }
 
-    if (!schwasm_define_label(schwasm, label, (uint16_t) value)) {
-        token_line = splexer_token_get_line(&schwasm->lexer, token);
-        sp_die(1, SCHWASM_FILE_FMT " Cannot redefine label \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm->filename, token_line), sp_sv_arg(*label));
+    if (!schwasm_define_label(schwasm, &label_token->sv, (uint16_t) value)) {
+        token_line = splexer_token_get_line(&schwasm->lexer, label_token);
+        sp_die(1, SCHWASM_FILE_FMT " Cannot redefine label \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm->filename, token_line), sp_sv_arg(label_token->sv));
     }
 }
 static void dc_b(struct Schwasm *schwasm, void *data) {

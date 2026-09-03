@@ -156,7 +156,7 @@ enum Schwasm_Value_Type schwasm_expect_value(struct Schwasm *schwasm) {
         }
 
         if (token->type != TOK_IntLiteral && token->type != TOK_ID) {
-            sp_die(1, SCHWASM_FILE_FMT " Unexpected token after $\n", schwasm_file_arg(schwasm->filename, prev_line));
+            sp_die(1, SCHWASM_FILE_FMT " Unexpected token after $\n", schwasm_file_arg(schwasm->filename, token_line));
         }
 
         return SCHWASM_VALUE_HEX;
@@ -165,7 +165,7 @@ enum Schwasm_Value_Type schwasm_expect_value(struct Schwasm *schwasm) {
     } else if (token->type == TOK_ID) {
         return SCHWASM_VALUE_LABEL;
     } else {
-        sp_die(1, SCHWASM_FILE_FMT " Unexpected value\n", schwasm_file_arg(schwasm->filename, prev_line));
+        sp_die(1, SCHWASM_FILE_FMT " Unexpected value\n", schwasm_file_arg(schwasm->filename, token_line));
         return 1;
     }
 }
@@ -250,15 +250,13 @@ static inline void schwasm_generate_ir__loop(struct Schwasm *schwasm) {
                 sp_die(1, SCHWASM_FILE_FMT " Preceding label on ORG disallowed\n", schwasm_file_arg(schwasm->filename, token_line));
             }
 
-            // TODO: dedicated function for label definitions
             if (!sp_sv_eq(&peek->sv, &sp_cstr_slice("EQU"))) {
-
                 if (!schwasm_define_label(schwasm, &token->sv, schwasm->addr)) {
                     sp_die(1, SCHWASM_FILE_FMT " Cannot redefine label \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm->filename, token_line), sp_sv_arg(token->sv));
                 }
             } else {
                 // The behavior of EQU is dispatched via Schwasm_Dispatcher. We send the `String_View` to the `EQU` dispatcher
-                data = (void *) &token->sv;
+                data = (void *) token;
             }
 
             schwasm_next_token(schwasm); // consume away the current token (label)
