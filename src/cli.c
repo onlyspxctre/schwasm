@@ -105,6 +105,10 @@ int main(int argc, char **argv) {
             case OUTPUT_PRINT:
                 rom = stdout;
                 ram = tmpfile();
+
+                if (!ram) {
+                    sp_die(1, "tmpfile()\n");
+                }
                 break;
         }
     }
