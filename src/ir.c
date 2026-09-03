@@ -158,7 +158,7 @@ static inline void ld_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
             next = schwasm_next_token(schwasm);
             next_line = splexer_token_get_line(&schwasm->lexer, next);
             if (!next || next->type != TOK_ID || next_line.line != token_line.line) {
-                sp_die(1, SCHWASM_FILE_FMT " Expected address register for indexed addressing\n", schwasm_file_arg(schwasm->filename, next_line));
+                sp_die(1, SCHWASM_FILE_FMT " Expected address register for indexed addressing\n", schwasm_file_arg(schwasm->filename, token_line));
             }
 
             if (sp_sv_eq(&next->sv, &sp_cstr_slice("X"))) {
@@ -170,7 +170,7 @@ static inline void ld_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
                         op = SCHWASM_OP_LDAB_X;
                         break;
                     default:
-                        sp_unreachable();
+                        sp_die(1, SCHWASM_FILE_FMT " Indexed addressing not supported with 16-bit register\n", schwasm_file_arg(schwasm->filename, token_line));
                 }
             } else if (sp_sv_eq(&next->sv, &sp_cstr_slice("Y"))) {
                 switch (reg) {
@@ -181,7 +181,7 @@ static inline void ld_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
                         op = SCHWASM_OP_LDAB_Y;
                         break;
                     default:
-                        sp_unreachable();
+                        sp_die(1, SCHWASM_FILE_FMT " Indexed addressing not supported with 16-bit register\n", schwasm_file_arg(schwasm->filename, token_line));
                 }
             } else {
                 sp_die(1, SCHWASM_FILE_FMT " Unexpected address register \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm->filename, next_line), sp_sv_arg(next->sv));
@@ -193,7 +193,7 @@ static inline void ld_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
                 sp_da_push(&query->value.deferred_indices, schwasm->nodes.count - 1);
             } else {
                 if (value > UINT8_MAX) {
-                    sp_die(1, SCHWASM_FILE_FMT " Value too large; 8-bit displacement expected", schwasm_file_arg(schwasm->filename, token_line));
+                    sp_die(1, SCHWASM_FILE_FMT " Value too large; 8-bit displacement expected\n", schwasm_file_arg(schwasm->filename, token_line));
                 }
 
                 schwasm_create_node(schwasm, op, (uint16_t) value);
