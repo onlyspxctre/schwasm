@@ -6,7 +6,8 @@
 
 #include <stdbool.h>
 
-#define ADDR_END 0x1FFF
+#define ROM_END 0x0FFF
+#define RAM_END 0x1FFF
 #define ADDR_LEN 0x2000
 
 #define SCHWASM_FILE_FMT "%s:%zu:%zu:"

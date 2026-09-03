@@ -205,7 +205,7 @@ static inline void ld_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
                 schwasm_create_node(schwasm, op, (uint16_t) value);
                 sp_da_push(&query->value.deferred_indices, schwasm->nodes.count - 1);
             } else {
-                if (value > ADDR_END) {
+                if (value > RAM_END) {
                     sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), value);
                 }
 
@@ -277,7 +277,7 @@ static inline void st_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
             schwasm_create_node(schwasm, op, (uint16_t) addr);
             sp_da_push(&query->value.deferred_indices, schwasm->nodes.count - 1);
         } else {
-            if (addr > ADDR_END) {
+            if (addr > RAM_END) {
                 token_line = splexer_token_get_line(&schwasm->lexer, token);
                 sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), addr);
             }
@@ -458,7 +458,7 @@ static void org(struct Schwasm *schwasm, void *data) {
             break;
         case SCHWASM_VALUE_DECIMAL:
             value = (token = schwasm_get_token(schwasm))->int_lit.value;
-            if (value > UINT16_MAX) {
+            if (value > RAM_END) {
                 token_line = splexer_token_get_line(&schwasm->lexer, token);
                 sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (%ld)\n", schwasm_file_arg(schwasm->filename, token_line), value);
             }
