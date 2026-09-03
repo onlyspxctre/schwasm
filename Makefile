@@ -47,6 +47,10 @@ BUILDDIR := $(BUILDROOT)/$(CONFIG)
 OBJDIR := $(OBJROOT)/$(CONFIG)
 LIBDIR := $(LIBROOT)/$(CONFIG)
 
+ifeq ($(RELEASE),)
+LDFLAGS += -Wl,-rpath,$(LIBDIR)
+endif
+
 ifneq ($(WINDOWS),)
 all: $(BUILDDIR)/schwasm.exe
 
