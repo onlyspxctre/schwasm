@@ -114,12 +114,10 @@ int main(int argc, char **argv) {
     }
 
     schwasm_generate_ir(&schwasm);
-    Schwasm_Nodes *nodes = NULL;
+    Schwasm_Nodes *nodes = &(Schwasm_Nodes) {0};
 
     if (schwasm.addr_unsorted) {
-        nodes = malloc(sizeof(Schwasm_Nodes));
         sp_da_reserve(nodes, schwasm.nodes.count);
-
         // pigeonhole sort
         uint16_t ordered_idx[ADDR_LEN];
         memset(ordered_idx,
