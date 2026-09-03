@@ -385,11 +385,11 @@ static void d_ex(struct Schwasm *schwasm, enum Declare_Directive directive) {
         dc_loop:
             switch (schwasm_expect_value(schwasm)) {
                 case SCHWASM_VALUE_HEX:
-                    if (schwasm_get_token(schwasm)->sv.count + schwasm_get_token(schwasm)->int_lit.suffixes.count > 2) {
+                    value = parse_hex_or_die(schwasm, schwasm_get_token(schwasm));
+                    if (value > UINT8_MAX) {
                         token_line = splexer_token_get_line(&schwasm->lexer, schwasm_get_token(schwasm));
                         sp_die(1, SCHWASM_FILE_FMT " Value too large; ROM word size is 8-bit\n", schwasm_file_arg(schwasm->filename, token_line));
                     }
-                    value = parse_hex_or_die(schwasm, schwasm_get_token(schwasm));
                     break;
                 case SCHWASM_VALUE_DECIMAL:
                     value = schwasm_get_token(schwasm)->int_lit.value;
@@ -451,7 +451,7 @@ static void org(struct Schwasm *schwasm, void *data) {
         case SCHWASM_VALUE_HEX:
             value = parse_hex_or_die(schwasm, (token = schwasm_get_token(schwasm)));
 
-            if (token->sv.count + token->int_lit.suffixes.count > 4) { // exceeds 4 hex digits
+            if (value > RAM_END) {
                 token_line = splexer_token_get_line(&schwasm->lexer, token);
                 sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%lX)\n", schwasm_file_arg(schwasm->filename, token_line), value);
             }
