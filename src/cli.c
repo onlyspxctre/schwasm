@@ -8,7 +8,10 @@ FILE *ram = NULL;
 static const char *input_path = NULL;
 static Sp_String_Builder output_dir = {0};
 
-enum Output_Mode { OUTPUT_NIL, OUTPUT_FILE, OUTPUT_PRINT };
+enum Output_Mode { OUTPUT_NIL,
+                   OUTPUT_FILE,
+                   OUTPUT_PRINT,
+};
 static enum Output_Mode output_mode = OUTPUT_NIL;
 
 void cleanup() { sp_da_free(&output_dir); }
@@ -70,49 +73,6 @@ int main(int argc, char **argv) {
                strerror(errno));
     }
 
-    {
-        Sp_String_Builder rom_path = {0};
-        Sp_String_Builder ram_path = {0};
-        switch (output_mode) {
-            case OUTPUT_NIL: sp_sb_append(&output_dir, ".");
-            case OUTPUT_FILE:
-                sp_sb_append(&rom_path, output_dir.data);
-                sp_sb_append(&rom_path, "/rom.mif");
-
-                sp_sb_append(&ram_path, output_dir.data);
-                sp_sb_append(&ram_path, "/ram.mif");
-
-                rom = fopen(rom_path.data, "wb");
-
-                if (!rom) {
-                    sp_die(1,
-                           "Unable to write to file \"%s\": %s\n",
-                           rom_path.data,
-                           strerror(errno));
-                }
-
-                ram = fopen(ram_path.data, "wb");
-                if (!ram) {
-                    sp_die(1,
-                           "Unable to write to file \"%s\": %s\n",
-                           ram_path.data,
-                           strerror(errno));
-                }
-
-                sp_da_free(&rom_path);
-                sp_da_free(&ram_path);
-                break;
-            case OUTPUT_PRINT:
-                rom = stdout;
-                ram = tmpfile();
-
-                if (!ram) {
-                    sp_die(1, "tmpfile()\n");
-                }
-                break;
-        }
-    }
-
     schwasm_generate_ir(&schwasm);
     Schwasm_Nodes *nodes = &(Schwasm_Nodes) {0};
 
@@ -141,6 +101,47 @@ int main(int argc, char **argv) {
         }
     } else {
         nodes = &schwasm.nodes;
+    }
+
+    Sp_String_Builder rom_path = {0};
+    Sp_String_Builder ram_path = {0};
+    switch (output_mode) {
+        case OUTPUT_NIL: sp_sb_append(&output_dir, ".");
+        case OUTPUT_FILE:
+            sp_sb_append(&rom_path, output_dir.data);
+            sp_sb_append(&rom_path, "/rom.mif");
+
+            sp_sb_append(&ram_path, output_dir.data);
+            sp_sb_append(&ram_path, "/ram.mif");
+
+            rom = fopen(rom_path.data, "wb");
+
+            if (!rom) {
+                sp_die(1,
+                       "Unable to write to file \"%s\": %s\n",
+                       rom_path.data,
+                       strerror(errno));
+            }
+
+            ram = fopen(ram_path.data, "wb");
+            if (!ram) {
+                sp_die(1,
+                       "Unable to write to file \"%s\": %s\n",
+                       ram_path.data,
+                       strerror(errno));
+            }
+
+            sp_da_free(&rom_path);
+            sp_da_free(&ram_path);
+            break;
+        case OUTPUT_PRINT:
+            rom = stdout;
+            ram = tmpfile();
+
+            if (!ram) {
+                sp_die(1, "tmpfile()\n");
+            }
+            break;
     }
 
     // TODO: hardcoded to 4096 for both for now
@@ -275,28 +276,26 @@ int main(int argc, char **argv) {
     fputs("END;\n", ram);
     sp_da_free(&smart_buf);
 
-    {
-        char buf[1024];
-        switch (output_mode) {
-            case OUTPUT_NIL:
-            case OUTPUT_FILE:
-                fclose(rom);
-                fclose(ram);
-                rom = NULL;
-                ram = NULL;
-                break;
-            case OUTPUT_PRINT:
-                rewind(ram);
+    char buf[1024];
+    switch (output_mode) {
+        case OUTPUT_NIL:
+        case OUTPUT_FILE:
+            fclose(rom);
+            fclose(ram);
+            rom = NULL;
+            ram = NULL;
+            break;
+        case OUTPUT_PRINT:
+            rewind(ram);
 
-                size_t bytes;
-                while ((bytes = fread(buf, 1, sizeof(buf), ram)) > 0) {
-                    fwrite(buf, 1, bytes, stdout);
-                }
+            size_t bytes;
+            while ((bytes = fread(buf, 1, sizeof(buf), ram)) > 0) {
+                fwrite(buf, 1, bytes, stdout);
+            }
 
-                fclose(ram);
-                ram = NULL;
-                break;
-        }
+            fclose(ram);
+            ram = NULL;
+            break;
     }
 
     return 0;
