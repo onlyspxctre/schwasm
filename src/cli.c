@@ -252,7 +252,7 @@ int main(int argc, char **argv) {
     schwasm_destroy(&schwasm);
 
     // "calloc" until end
-    if (0x0FFF > rom_next_addr) {
+    if (0x0FFF >= rom_next_addr) {
         sp_sb_append_c(&smart_buf, '[');
         sp_sb_append_hex_ex(&smart_buf, rom_next_addr, 0, 4);
         sp_sb_append(&smart_buf, "..0FFF]\t:\t00;\n\n");
@@ -260,7 +260,7 @@ int main(int argc, char **argv) {
         fputs(smart_buf.data, rom);
         sp_da_clear(&smart_buf);
     }
-    if (0x0FFF > ram_next_addr) {
+    if (0x0FFF >= ram_next_addr) {
         sp_sb_append_c(&smart_buf, '[');
         sp_sb_append_hex_ex(&smart_buf, ram_next_addr, 0, 4);
         sp_sb_append(&smart_buf, "..0FFF]\t:\t00;\n\n");
