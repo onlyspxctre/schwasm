@@ -19,6 +19,26 @@ static inline long parse_hex_or_die(struct Schwasm *schwasm, const Sp_Lexer_Toke
     return value;
 }
 
+#define schwasm_ir_expect_value_macro(__schwasm__, __token__, __value__, __query__, __deferred_flag__)       \
+    switch (schwasm_expect_value((__schwasm__))) {                                                           \
+        case SCHWASM_VALUE_HEX:                                                                              \
+            (__value__) = parse_hex_or_die((__schwasm__), ((__token__) = schwasm_get_token((__schwasm__)))); \
+            break;                                                                                           \
+        case SCHWASM_VALUE_DECIMAL:                                                                          \
+            (__value__) = ((__token__) = schwasm_get_token((__schwasm__)))->int_lit.value;                   \
+            break;                                                                                           \
+        case SCHWASM_VALUE_LABEL:                                                                            \
+            (__token__) = schwasm_get_token((__schwasm__));                                                  \
+            (__query__) = schwasm_depend_label((__schwasm__), (__token__)->sv);                              \
+            /* TODO: requires query null check */                                                            \
+                                                                                                             \
+            if (!(__query__)->value.defined) (__deferred_flag__) = true;                                     \
+            else {                                                                                           \
+                (__value__) = (__query__)->value.value;                                                      \
+            }                                                                                                \
+            break;                                                                                           \
+    }
+
 enum GCPU_REG {
     GCPU_REGA,
     GCPU_REGB,
@@ -41,7 +61,7 @@ static inline void ld_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
     enum Schwasm_Op op;
     long value = 0;
     bool deferred = false;
-    sp_ht_node_t(&schwasm->label_table)* query = NULL;
+    sp_ht_node_t(&schwasm->label_table) *query = NULL;
     if (next->type == TOK_Pound) {   // immediate addressing
         schwasm_next_token(schwasm); // consume the TOK_Pound
 
@@ -60,36 +80,13 @@ static inline void ld_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
                 break;
         }
 
-        switch (schwasm_expect_value(schwasm)) {
-            case SCHWASM_VALUE_HEX:
-                value = parse_hex_or_die(schwasm, (token = schwasm_get_token(schwasm)));
-                break;
-            case SCHWASM_VALUE_DECIMAL:
-                value = (token = schwasm_get_token(schwasm))->int_lit.value;
-                break;
-            case SCHWASM_VALUE_LABEL:
-                token = schwasm_get_token(schwasm);
-                sp_ht_get(&schwasm->label_table, token->sv, &query);
-
-                if (!query) {
-                    // TODO: dedicated function for label dependency
-                    sp_ht_insert(&schwasm->label_table, token->sv, ((struct Schwasm_Label_Entry) { .defined = false }));
-                    sp_ht_get(&schwasm->label_table, token->sv, &query);
-                    assert(query);
-                }
-
-                if (!query->value.defined) deferred = true;
-                else {
-                    value = query->value.value;
-                }
-                break;
-        }
+        schwasm_ir_expect_value_macro(schwasm, token, value, query, deferred);
         token_line = splexer_token_get_line(&schwasm->lexer, token);
 
         if (deferred) {
             // TODO: currently deferred node edits skip bounds checking
             schwasm_create_node(schwasm, op, (uint16_t) value);
-            sp_da_push(&query->value.deferred_indices, schwasm->nodes.count - 1);
+            sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer) {.index = schwasm->nodes.count - 1, .token_line = token_line}));
         } else {
             switch (reg) {
                 case GCPU_REGA:
@@ -124,30 +121,8 @@ static inline void ld_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
                 break;
         }
 
-        switch (schwasm_expect_value(schwasm)) {
-            case SCHWASM_VALUE_HEX:
-                value = parse_hex_or_die(schwasm, (token = schwasm_get_token(schwasm)));
-                break;
-            case SCHWASM_VALUE_DECIMAL:
-                value = (token = schwasm_get_token(schwasm))->int_lit.value;
-                break;
-            case SCHWASM_VALUE_LABEL:
-                token = schwasm_get_token(schwasm);
-                sp_ht_get(&schwasm->label_table, token->sv, &query);
-
-                if (!query) {
-                    // TODO: dedicated function for label dependency
-                    sp_ht_insert(&schwasm->label_table, token->sv, ((struct Schwasm_Label_Entry) { .defined = false }));
-                    sp_ht_get(&schwasm->label_table, token->sv, &query);
-                    assert(query);
-                }
-
-                if (!query->value.defined) deferred = true;
-                else {
-                    value = query->value.value;
-                }
-                break;
-        }
+        schwasm_ir_expect_value_macro(schwasm, token, value, query, deferred);
+        token_line = splexer_token_get_line(&schwasm->lexer, token);
 
         next = schwasm_peek_token(schwasm);
         next_line = splexer_token_get_line(&schwasm->lexer, next);
@@ -190,7 +165,7 @@ static inline void ld_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
             if (deferred) {
                 // TODO: currently deferred node edits skip bounds checking
                 schwasm_create_node(schwasm, op, (uint16_t) value);
-                sp_da_push(&query->value.deferred_indices, schwasm->nodes.count - 1);
+                sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer) {.index = schwasm->nodes.count - 1, .token_line = token_line}));
             } else {
                 if (value > UINT8_MAX) {
                     sp_die(1, SCHWASM_FILE_FMT " Value too large; 8-bit displacement expected\n", schwasm_file_arg(schwasm->filename, token_line));
@@ -203,7 +178,7 @@ static inline void ld_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
             if (deferred) {
                 // TODO: currently deferred node edits skip bounds checking
                 schwasm_create_node(schwasm, op, (uint16_t) value);
-                sp_da_push(&query->value.deferred_indices, schwasm->nodes.count - 1);
+                sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer) {.index = schwasm->nodes.count - 1, .token_line = token_line}));
             } else {
                 if (value > RAM_END) {
                     sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), value);
@@ -229,7 +204,7 @@ static inline void st_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
     enum Schwasm_Op op;
     long addr = 0;
     bool deferred = false;
-    sp_ht_node_t(&schwasm->label_table)* query = NULL;
+    sp_ht_node_t(&schwasm->label_table) *query = NULL;
 
     if (next->type == TOK_Pound) {
         sp_die(1, SCHWASM_FILE_FMT " Unexpected immediate value; store operations cannot be performed onto immediate value\n", schwasm_file_arg(schwasm->filename, next_line));
@@ -247,38 +222,15 @@ static inline void st_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
                 break;
         }
 
-        switch (schwasm_expect_value(schwasm)) {
-            case SCHWASM_VALUE_HEX:
-                addr = parse_hex_or_die(schwasm, (token = schwasm_get_token(schwasm)));
-                break;
-            case SCHWASM_VALUE_DECIMAL:
-                addr = (token = schwasm_get_token(schwasm))->int_lit.value;
-                break;
-            case SCHWASM_VALUE_LABEL:
-                token = schwasm_get_token(schwasm);
-                sp_ht_get(&schwasm->label_table, token->sv, &query);
-
-                if (!query) {
-                    // TODO: dedicated function for label dependency
-                    sp_ht_insert(&schwasm->label_table, token->sv, ((struct Schwasm_Label_Entry) { .defined = false }));
-                    sp_ht_get(&schwasm->label_table, token->sv, &query);
-                    assert(query);
-                }
-
-                if (!query->value.defined) deferred = true;
-                else {
-                    addr = query->value.value;
-                }
-                break;
-        }
+        schwasm_ir_expect_value_macro(schwasm, token, addr, query, deferred);
+        token_line = splexer_token_get_line(&schwasm->lexer, token);
 
         if (deferred) {
             // TODO: currently deferred node edits skip bounds checking
             schwasm_create_node(schwasm, op, (uint16_t) addr);
-            sp_da_push(&query->value.deferred_indices, schwasm->nodes.count - 1);
+            sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer) {.index = schwasm->nodes.count - 1, .token_line = token_line}));
         } else {
             if (addr > RAM_END) {
-                token_line = splexer_token_get_line(&schwasm->lexer, token);
                 sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), addr);
             }
 
@@ -310,40 +262,17 @@ static inline void branch_ex(struct Schwasm *schwasm, enum Schwasm_Op op) {
 
     long addr = 0;
     bool deferred = false;
-    sp_ht_node_t(&schwasm->label_table)* query = NULL;
+    sp_ht_node_t(&schwasm->label_table) *query = NULL;
 
     if (next->type == TOK_Pound) {
         sp_die(1, SCHWASM_FILE_FMT " Unexpected immediate value; branch operations require lower-order byte of addr\n", schwasm_file_arg(schwasm->filename, next_line));
     } else {
-        switch (schwasm_expect_value(schwasm)) {
-            case SCHWASM_VALUE_HEX:
-                addr = parse_hex_or_die(schwasm, (token = schwasm_get_token(schwasm)));
-                break;
-            case SCHWASM_VALUE_DECIMAL:
-                addr = (token = schwasm_get_token(schwasm))->int_lit.value;
-                break;
-            case SCHWASM_VALUE_LABEL:
-                token = schwasm_get_token(schwasm);
-                sp_ht_get(&schwasm->label_table, token->sv, &query);
-
-                if (!query) {
-                    // TODO: dedicated function for label dependency
-                    sp_ht_insert(&schwasm->label_table, token->sv, ((struct Schwasm_Label_Entry) { .defined = false }));
-                    sp_ht_get(&schwasm->label_table, token->sv, &query);
-                    assert(query);
-                }
-
-                if (!query->value.defined) deferred = true;
-                else {
-                    addr = query->value.value;
-                }
-                break;
-        }
+        schwasm_ir_expect_value_macro(schwasm, token, addr, query, deferred);
 
         if (deferred) {
             // TODO: currently deferred node edits skip bounds checking
             schwasm_create_node(schwasm, op, (uint16_t) addr);
-            sp_da_push(&query->value.deferred_indices, schwasm->nodes.count - 1);
+            sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer) {.index = schwasm->nodes.count - 1, .token_line = splexer_token_get_line(&schwasm->lexer, token)}));
         } else {
             if (addr > UINT8_MAX) {
                 sp_die(1, SCHWASM_FILE_FMT " Cannot branch to (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), addr);
@@ -587,7 +516,7 @@ static void equ(struct Schwasm *schwasm, void *data) {
     }
     const Sp_String_View *label = (const Sp_String_View *) data;
 
-    long value;
+    long value = 0;
     const Sp_Lexer_Token *token;
     Sp_Lexer_Token_Line token_line;
     switch (schwasm_expect_value(schwasm)) {
@@ -603,26 +532,9 @@ static void equ(struct Schwasm *schwasm, void *data) {
             break;
     }
 
-    // TODO: dedicated function for label definitions
-    sp_ht_node_t(&schwasm->label_table)* query = NULL;
-    sp_ht_get(&schwasm->label_table, *label, &query);
-
-    if (query) {
-        if (query->value.defined) {
-            token_line = splexer_token_get_line(&schwasm->lexer, token);
-            sp_die(1, SCHWASM_FILE_FMT " Cannot redefine label \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm->filename, token_line), sp_sv_arg(*label));
-        }
-
-        for (size_t i = 0; i < query->value.deferred_indices.count; ++i) {
-            schwasm_node_edit(&schwasm->nodes.data[query->value.deferred_indices.data[i]], (uint16_t) value);
-        }
-        sp_da_free(&query->value.deferred_indices);
-        query->value.deferred_indices.count = 0;
-        query->value.deferred_indices.capacity = 0;
-        query->value.defined = true;
-        query->value.value = value;
-    } else {
-        sp_ht_insert(&schwasm->label_table, *label, ((struct Schwasm_Label_Entry) {.defined = true, .value = value}));
+    if (!schwasm_define_label(schwasm, label, (uint16_t) value)) {
+        token_line = splexer_token_get_line(&schwasm->lexer, token);
+        sp_die(1, SCHWASM_FILE_FMT " Cannot redefine label \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm->filename, token_line), sp_sv_arg(*label));
     }
 }
 static void dc_b(struct Schwasm *schwasm, void *data) {
@@ -686,4 +598,3 @@ inline Schwasm_Dispatcher *schwasm_dispatcher_get_sv(Sp_String_View sv) {
 
     return query->value;
 }
-

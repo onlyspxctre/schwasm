@@ -55,6 +55,42 @@ struct Schwasm_Node *schwasm_create_node(struct Schwasm *schwasm, enum Schwasm_O
     return &schwasm->nodes.data[schwasm->nodes.count - 1];
 }
 
+void* schwasm_depend_label(struct Schwasm *schwasm, Sp_String_View label) {
+    sp_ht_node_t(&schwasm->label_table)* query = NULL;
+
+    sp_ht_get(&schwasm->label_table, label, &query);
+
+    if (query) return query;
+    sp_ht_insert(&schwasm->label_table, label, ((struct Schwasm_Label_Entry) { .defined = false }));
+    sp_ht_get(&schwasm->label_table, label, &query);
+
+    return query;
+}
+
+void* schwasm_define_label(struct Schwasm *schwasm, const Sp_String_View *label, uint16_t value) {
+    sp_ht_node_t(&schwasm->label_table) *query = NULL;
+    sp_ht_get(&schwasm->label_table, *label, &query);
+
+    if (query) {
+        if (query->value.defined) {
+            return NULL;
+        }
+        for (size_t i = 0; i < query->value.deferred.count; ++i) {
+            schwasm_node_edit(&schwasm->nodes.data[query->value.deferred.data[i].index], value);
+        }
+        sp_da_free(&query->value.deferred);
+        query->value.deferred.count = 0;
+        query->value.deferred.capacity = 0;
+        query->value.defined = true;
+        query->value.value = value;
+    } else {
+        sp_ht_insert(&schwasm->label_table, *label, ((struct Schwasm_Label_Entry) {.defined = true, .value = value}));
+        sp_ht_get(&schwasm->label_table, *label, &query);
+    }
+
+    return query;
+}
+
 inline void schwasm_node_edit(struct Schwasm_Node *node, uint16_t dword) {
     switch (SCHWASM_OP_COUNT[node->op]) {
         case 0:
@@ -135,15 +171,6 @@ enum Schwasm_Value_Type schwasm_expect_value(struct Schwasm *schwasm) {
 }
 
 void schwasm_destroy(struct Schwasm *schwasm) {
-    for (size_t i = 0; i < schwasm->label_table.capacity; ++i) {
-        if (schwasm->label_table.psls[i] == SP_HT_PSL_SENTINEL) {
-            continue;
-        }
-
-        if (!schwasm->label_table.buckets[i].value.defined) {
-            sp_die(1, "Undefined label: \"" SP_SV_FMT "\"\n", sp_sv_arg(schwasm->label_table.buckets[i].key));
-        }
-    }
     splexer_destroy(&schwasm->lexer);
     sp_da_free(&schwasm->nodes);
     sp_ht_free(&schwasm->label_table);
@@ -166,6 +193,16 @@ void schwasm_generate_ir(struct Schwasm *schwasm) {
     }
 
     schwasm_generate_ir__loop(schwasm);
+
+    for (size_t i = 0; i < schwasm->label_table.capacity; ++i) {
+        if (schwasm->label_table.psls[i] == SP_HT_PSL_SENTINEL) {
+            continue;
+        }
+
+        if (!schwasm->label_table.buckets[i].value.defined) {
+            sp_die(1, SCHWASM_FILE_FMT " Undefined label: \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm->filename, schwasm->label_table.buckets[i].value.deferred.data[0].token_line), sp_sv_arg(schwasm->label_table.buckets[i].key));
+        }
+    }
 }
 
 static inline void schwasm_generate_ir__loop(struct Schwasm *schwasm) {
@@ -215,24 +252,9 @@ static inline void schwasm_generate_ir__loop(struct Schwasm *schwasm) {
 
             // TODO: dedicated function for label definitions
             if (!sp_sv_eq(&peek->sv, &sp_cstr_slice("EQU"))) {
-                sp_ht_node_t(&schwasm->label_table)* query = NULL;
-                sp_ht_get(&schwasm->label_table, token->sv, &query);
 
-                if (query) {
-                    if (query->value.defined) {
-                        token_line = splexer_token_get_line(&schwasm->lexer, token);
-                        sp_die(1, SCHWASM_FILE_FMT " Cannot redefine label \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm->filename, token_line), sp_sv_arg(token->sv));
-                    }
-                    for (size_t i = 0; i < query->value.deferred_indices.count; ++i) {
-                        schwasm_node_edit(&schwasm->nodes.data[query->value.deferred_indices.data[i]], schwasm->addr);
-                    }
-                    sp_da_free(&query->value.deferred_indices);
-                    query->value.deferred_indices.count = 0;
-                    query->value.deferred_indices.capacity = 0;
-                    query->value.defined = true;
-                    query->value.value = schwasm->addr;
-                } else {
-                    sp_ht_insert(&schwasm->label_table, token->sv, ((struct Schwasm_Label_Entry) {.defined = true, .value = schwasm->addr}));
+                if (!schwasm_define_label(schwasm, &token->sv, schwasm->addr)) {
+                    sp_die(1, SCHWASM_FILE_FMT " Cannot redefine label \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm->filename, token_line), sp_sv_arg(token->sv));
                 }
             } else {
                 // The behavior of EQU is dispatched via Schwasm_Dispatcher. We send the `String_View` to the `EQU` dispatcher

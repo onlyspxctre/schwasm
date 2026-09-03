@@ -112,19 +112,24 @@ struct Schwasm_Node {
     uint16_t addr;
 };
 
-typedef Sp_Dynamic_Array(struct Schwasm_Node) Schwasm_Nodes;
-
+struct Schwasm_Label_Defer {
+    size_t index;
+    Sp_Lexer_Token_Line token_line;
+};
 struct Schwasm_Label_Entry {
     bool defined;
-    Sp_Dynamic_Array(size_t) deferred_indices;
+    Sp_Dynamic_Array(struct Schwasm_Label_Defer) deferred;
     long value;
 };
+
+typedef Sp_Dynamic_Array(struct Schwasm_Node) Schwasm_Nodes;
+typedef Sp_Hash_Table(Sp_String_View, struct Schwasm_Label_Entry) Schwasm_Label_Table;
 
 struct Schwasm {
     Sp_Lexer lexer;
     Schwasm_Nodes nodes;
     Sp_Bitset used_addrs;
-    Sp_Hash_Table(Sp_String_View, struct Schwasm_Label_Entry) label_table;
+    Schwasm_Label_Table label_table;
     struct {
         size_t idx;
         bool busy;
@@ -144,7 +149,11 @@ enum Schwasm_Value_Type {
 extern struct Schwasm schwasm_init(const char *filename);
 extern void schwasm_expect_org(struct Schwasm *schwasm);
 extern struct Schwasm_Node *schwasm_create_node(struct Schwasm *schwasm, enum Schwasm_Op op, uint16_t dword);
-extern void schwasm_node_edit(struct Schwasm_Node* node, uint16_t dword);
+/* Declares a dependency to a specified label. Always returns the `sp_ht_node_t *` temporary. Assembler will fail in the event this dependency is not satisfied. */
+extern void *schwasm_depend_label(struct Schwasm *schwasm, Sp_String_View label);
+/* Defines a label, then returns the `sp_ht_node_t *` temporary to the node. If defining failed (duplicate keys found), return `NULL`. */
+extern void *schwasm_define_label(struct Schwasm *schwasm, const Sp_String_View *label, uint16_t value);
+extern void schwasm_node_edit(struct Schwasm_Node *node, uint16_t dword);
 extern const Sp_Lexer_Token *schwasm_get_token(struct Schwasm *schwasm);
 extern const Sp_Lexer_Token *schwasm_peek_token(struct Schwasm *schwasm);
 extern const Sp_Lexer_Token *schwasm_next_token(struct Schwasm *schwasm);
