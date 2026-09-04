@@ -149,6 +149,7 @@ enum Schwasm_Value_Type {
 extern struct Schwasm schwasm_init(const char *filename);
 extern void schwasm_expect_org(struct Schwasm *schwasm);
 extern struct Schwasm_Node *schwasm_create_node(struct Schwasm *schwasm, enum Schwasm_Op op, uint16_t dword);
+extern void schwasm_op_validate(struct Schwasm *schwasm, enum Schwasm_Op op, long value, Sp_Lexer_Token_Line token_line);
 /* Declares a dependency to a specified label. Always returns the `sp_ht_node_t *` temporary. Assembler will fail in the event this dependency is not satisfied. */
 extern void *schwasm_depend_label(struct Schwasm *schwasm, Sp_String_View label);
 /* Defines a label, then returns the `sp_ht_node_t *` temporary to the node. If defining failed (duplicate keys found), return `NULL`. */

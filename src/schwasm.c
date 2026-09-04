@@ -55,6 +55,65 @@ struct Schwasm_Node *schwasm_create_node(struct Schwasm *schwasm, enum Schwasm_O
     return &schwasm->nodes.data[schwasm->nodes.count - 1];
 }
 
+inline void schwasm_op_validate(struct Schwasm *schwasm, enum Schwasm_Op op, long value, Sp_Lexer_Token_Line token_line) {
+    switch (op) {
+        // 8-bit registers
+        case SCHWASM_OP_LDAA_IMM:
+        case SCHWASM_OP_LDAB_IMM:
+            if (value > UINT8_MAX) {
+                sp_die(1, SCHWASM_FILE_FMT " Value too large; register is 8-bits\n",
+                       schwasm_file_arg(schwasm->filename, token_line));
+            }
+            break;
+        // 16-bit registers
+        case SCHWASM_OP_LDX_IMM:
+        case SCHWASM_OP_LDY_IMM:
+            if (value > UINT16_MAX) {
+                sp_die(1, SCHWASM_FILE_FMT " Value too large; register is 16-bits\n",
+                       schwasm_file_arg(schwasm->filename, token_line));
+            }
+            break;
+        // 8-bit disp (indexed addressing)
+        case SCHWASM_OP_LDAA_X:
+        case SCHWASM_OP_LDAA_Y:
+        case SCHWASM_OP_LDAB_X:
+        case SCHWASM_OP_LDAB_Y:
+        case SCHWASM_OP_STAA_X:
+        case SCHWASM_OP_STAA_Y:
+        case SCHWASM_OP_STAB_X:
+        case SCHWASM_OP_STAB_Y:
+            if (value > UINT8_MAX) {
+                sp_die(1, SCHWASM_FILE_FMT " Value too large; 8-bit displacement expected\n",
+                       schwasm_file_arg(schwasm->filename, token_line));
+            }
+            break;
+        // Extended addressing
+        case SCHWASM_OP_LDAA:
+        case SCHWASM_OP_LDAB:
+        case SCHWASM_OP_LDX:
+        case SCHWASM_OP_LDY:
+        case SCHWASM_OP_STAA:
+        case SCHWASM_OP_STAB:
+            if (value > RAM_END) {
+                sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04lX)\n",
+                       schwasm_file_arg(schwasm->filename, token_line), value);
+            }
+            break;
+        // Branching
+        case SCHWASM_OP_BEQ:
+        case SCHWASM_OP_BNE:
+        case SCHWASM_OP_BN:
+        case SCHWASM_OP_BP:
+            if (value > UINT8_MAX) {
+                sp_die(1, SCHWASM_FILE_FMT " Cannot branch to (0x%04lX)\n",
+                       schwasm_file_arg(schwasm->filename, token_line), value);
+            }
+            break;
+        default:
+            break;
+    }
+}
+
 void* schwasm_depend_label(struct Schwasm *schwasm, Sp_String_View label) {
     sp_ht_node_t(&schwasm->label_table)* query = NULL;
 
@@ -76,7 +135,9 @@ void* schwasm_define_label(struct Schwasm *schwasm, const Sp_String_View *label,
             return NULL;
         }
         for (size_t i = 0; i < query->value.deferred.count; ++i) {
-            schwasm_node_edit(&schwasm->nodes.data[query->value.deferred.data[i].index], value);
+            struct Schwasm_Node *node = &schwasm->nodes.data[query->value.deferred.data[i].index];
+            schwasm_op_validate(schwasm, node->op, value, query->value.deferred.data[i].token_line);
+            schwasm_node_edit(node, value);
         }
         sp_da_free(&query->value.deferred);
         query->value.deferred.count = 0;

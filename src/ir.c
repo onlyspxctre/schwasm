@@ -31,7 +31,6 @@ static inline long parse_hex_or_die(struct Schwasm *schwasm, const Sp_Lexer_Toke
             (__token__) = schwasm_get_token((__schwasm__));                                                  \
             (__query__) = schwasm_depend_label((__schwasm__), (__token__)->sv);                              \
             /* TODO: requires query null check */                                                            \
-                                                                                                             \
             if (!(__query__)->value.defined) (__deferred_flag__) = true;                                     \
             else {                                                                                           \
                 (__value__) = (__query__)->value.value;                                                      \
@@ -84,25 +83,10 @@ static inline void ld_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
         token_line = splexer_token_get_line(&schwasm->lexer, token);
 
         if (deferred) {
-            // TODO: currently deferred node edits skip bounds checking
             schwasm_create_node(schwasm, op, (uint16_t) value);
             sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer) {.index = schwasm->nodes.count - 1, .token_line = token_line}));
         } else {
-            switch (reg) {
-                case GCPU_REGA:
-                case GCPU_REGB:
-                    if (value > UINT8_MAX) {
-                        sp_die(1, SCHWASM_FILE_FMT " Value too large; register is 8-bits\n", schwasm_file_arg(schwasm->filename, token_line));
-                    }
-                    break;
-                case GCPU_REGX:
-                case GCPU_REGY:
-                    if (value > UINT16_MAX) {
-                        sp_die(1, SCHWASM_FILE_FMT " Value too large; register is 16-bits\n", schwasm_file_arg(schwasm->filename, token_line));
-                    }
-                    break;
-            }
-
+            schwasm_op_validate(schwasm, op, value, token_line);
             schwasm_create_node(schwasm, op, (uint16_t) value);
         }
     } else { // extended addressing
@@ -163,27 +147,18 @@ static inline void ld_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
             }
 
             if (deferred) {
-                // TODO: currently deferred node edits skip bounds checking
                 schwasm_create_node(schwasm, op, (uint16_t) value);
                 sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer) {.index = schwasm->nodes.count - 1, .token_line = token_line}));
             } else {
-                if (value > UINT8_MAX) {
-                    sp_die(1, SCHWASM_FILE_FMT " Value too large; 8-bit displacement expected\n", schwasm_file_arg(schwasm->filename, token_line));
-                }
-
+                schwasm_op_validate(schwasm, op, value, token_line);
                 schwasm_create_node(schwasm, op, (uint16_t) value);
             }
-
         } else {
             if (deferred) {
-                // TODO: currently deferred node edits skip bounds checking
                 schwasm_create_node(schwasm, op, (uint16_t) value);
                 sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer) {.index = schwasm->nodes.count - 1, .token_line = token_line}));
             } else {
-                if (value > RAM_END) {
-                    sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), value);
-                }
-
+                schwasm_op_validate(schwasm, op, value, token_line);
                 schwasm_create_node(schwasm, op, (uint16_t) value);
             }
         }
@@ -226,14 +201,10 @@ static inline void st_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
         token_line = splexer_token_get_line(&schwasm->lexer, token);
 
         if (deferred) {
-            // TODO: currently deferred node edits skip bounds checking
             schwasm_create_node(schwasm, op, (uint16_t) addr);
             sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer) {.index = schwasm->nodes.count - 1, .token_line = token_line}));
         } else {
-            if (addr > RAM_END) {
-                sp_die(1, SCHWASM_FILE_FMT " Address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), addr);
-            }
-
+            schwasm_op_validate(schwasm, op, addr, token_line);
             schwasm_create_node(schwasm, op, (uint16_t) addr);
         }
     }
@@ -271,14 +242,10 @@ static inline void branch_ex(struct Schwasm *schwasm, enum Schwasm_Op op) {
         token_line = splexer_token_get_line(&schwasm->lexer, token);
 
         if (deferred) {
-            // TODO: currently deferred node edits skip bounds checking
             schwasm_create_node(schwasm, op, (uint16_t) addr);
             sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer) {.index = schwasm->nodes.count - 1, .token_line = token_line }));
         } else {
-            if (addr > UINT8_MAX) {
-                sp_die(1, SCHWASM_FILE_FMT " Cannot branch to (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), addr);
-            }
-
+            schwasm_op_validate(schwasm, op, addr, token_line);
             schwasm_create_node(schwasm, op, (uint16_t) addr);
         }
     }
