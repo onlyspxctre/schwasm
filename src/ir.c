@@ -200,6 +200,45 @@ static inline void st_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
         schwasm_ir_expect_value_macro(schwasm, token, addr, query, deferred);
         token_line = splexer_token_get_line(&schwasm->lexer, token);
 
+        next = schwasm_peek_token(schwasm);
+        next_line = splexer_token_get_line(&schwasm->lexer, next);
+
+        if (next && next->type == TOK_Comma && token_line.line == next_line.line) {
+            schwasm_next_token(schwasm);
+
+            next = schwasm_next_token(schwasm);
+            next_line = splexer_token_get_line(&schwasm->lexer, next);
+            if (!next || next->type != TOK_ID || next_line.line != token_line.line) {
+                sp_die(1, SCHWASM_FILE_FMT " Expected address register for indexed addressing\n", schwasm_file_arg(schwasm->filename, token_line));
+            }
+
+            if (sp_sv_eq(&next->sv, &sp_cstr_slice("X"))) {
+                switch (reg) {
+                    case GCPU_REGA:
+                        op = SCHWASM_OP_STAA_X;
+                        break;
+                    case GCPU_REGB:
+                        op = SCHWASM_OP_STAB_X;
+                        break;
+                    default:
+                        sp_die(1, SCHWASM_FILE_FMT " Indexed addressing not supported with 16-bit register\n", schwasm_file_arg(schwasm->filename, token_line));
+                }
+            } else if (sp_sv_eq(&next->sv, &sp_cstr_slice("Y"))) {
+                switch (reg) {
+                    case GCPU_REGA:
+                        op = SCHWASM_OP_STAA_Y;
+                        break;
+                    case GCPU_REGB:
+                        op = SCHWASM_OP_STAB_Y;
+                        break;
+                    default:
+                        sp_die(1, SCHWASM_FILE_FMT " Indexed addressing not supported with 16-bit register\n", schwasm_file_arg(schwasm->filename, token_line));
+                }
+            } else {
+                sp_die(1, SCHWASM_FILE_FMT " Unexpected address register \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm->filename, next_line), sp_sv_arg(next->sv));
+            }
+        }
+
         if (deferred) {
             schwasm_create_node(schwasm, op, (uint16_t) addr);
             sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer) {.index = schwasm->nodes.count - 1, .token_line = token_line}));
