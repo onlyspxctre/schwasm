@@ -126,7 +126,7 @@ void* schwasm_depend_label(struct Schwasm *schwasm, Sp_String_View label) {
     return query;
 }
 
-void* schwasm_define_label(struct Schwasm *schwasm, const Sp_String_View *label, uint16_t value) {
+void* schwasm_define_label(struct Schwasm *schwasm, const Sp_String_View *label, long value) {
     sp_ht_node_t(&schwasm->label_table) *query = NULL;
     sp_ht_get(&schwasm->label_table, *label, &query);
 
@@ -137,7 +137,7 @@ void* schwasm_define_label(struct Schwasm *schwasm, const Sp_String_View *label,
         for (size_t i = 0; i < query->value.deferred.count; ++i) {
             struct Schwasm_Node *node = &schwasm->nodes.data[query->value.deferred.data[i].index];
             schwasm_op_validate(schwasm, node->op, value, query->value.deferred.data[i].token_line);
-            schwasm_node_edit(node, value);
+            schwasm_node_edit(node, (uint16_t) value);
         }
         sp_da_free(&query->value.deferred);
         query->value.deferred.count = 0;

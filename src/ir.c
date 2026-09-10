@@ -539,7 +539,7 @@ static void equ(struct Schwasm *schwasm, void *data) {
             break;
     }
 
-    if (!schwasm_define_label(schwasm, &label_token->sv, (uint16_t) value)) {
+    if (!schwasm_define_label(schwasm, &label_token->sv, value)) {
         token_line = splexer_token_get_line(&schwasm->lexer, label_token);
         sp_die(1, SCHWASM_FILE_FMT " Cannot redefine label \"" SP_SV_FMT "\"\n", schwasm_file_arg(schwasm->filename, token_line), sp_sv_arg(label_token->sv));
     }

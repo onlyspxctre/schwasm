@@ -153,7 +153,7 @@ extern void schwasm_op_validate(struct Schwasm *schwasm, enum Schwasm_Op op, lon
 /* Declares a dependency to a specified label. Always returns the `sp_ht_node_t *` temporary. Assembler will fail in the event this dependency is not satisfied. */
 extern void *schwasm_depend_label(struct Schwasm *schwasm, Sp_String_View label);
 /* Defines a label, then returns the `sp_ht_node_t *` temporary to the node. If defining failed (duplicate keys found), return `NULL`. */
-extern void *schwasm_define_label(struct Schwasm *schwasm, const Sp_String_View *label, uint16_t value);
+extern void *schwasm_define_label(struct Schwasm *schwasm, const Sp_String_View *label, long value);
 extern void schwasm_node_edit(struct Schwasm_Node *node, uint16_t dword);
 extern const Sp_Lexer_Token *schwasm_get_token(struct Schwasm *schwasm);
 extern const Sp_Lexer_Token *schwasm_peek_token(struct Schwasm *schwasm);
