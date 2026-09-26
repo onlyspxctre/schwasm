@@ -367,7 +367,7 @@ static void d_ex(struct Schwasm *schwasm, enum Declare_Directive directive) {
             if (schwasm->addr < 0x1000) {
                 sp_die(1, SCHWASM_FILE_FMT " Cannot reserve bytes in read-only ROM (0x%04X)\n", schwasm_file_arg(schwasm->filename, token_line), schwasm->addr);
             }
-            if (value > (long) ADDR_LEN - schwasm->addr) {
+            if (schwasm->addr + value > ADDR_LEN) {
                 sp_die(1, SCHWASM_FILE_FMT " Reserved address out of bounds (0x%04lX)\n", schwasm_file_arg(schwasm->filename, token_line), schwasm->addr + value);
             }
             if (value <= 0) {
