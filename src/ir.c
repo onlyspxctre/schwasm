@@ -84,7 +84,7 @@ static inline void ld_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
 
         if (deferred) {
             schwasm_create_node(schwasm, op, (uint16_t) value);
-            sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer) {.index = schwasm->nodes.count - 1, .token_line = token_line}));
+            sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer){.index = schwasm->nodes.count - 1, .token_line = token_line}));
         } else {
             schwasm_op_validate(schwasm, op, value, token_line);
             schwasm_create_node(schwasm, op, (uint16_t) value);
@@ -148,7 +148,7 @@ static inline void ld_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
 
             if (deferred) {
                 schwasm_create_node(schwasm, op, (uint16_t) value);
-                sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer) {.index = schwasm->nodes.count - 1, .token_line = token_line}));
+                sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer){.index = schwasm->nodes.count - 1, .token_line = token_line}));
             } else {
                 schwasm_op_validate(schwasm, op, value, token_line);
                 schwasm_create_node(schwasm, op, (uint16_t) value);
@@ -156,7 +156,7 @@ static inline void ld_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
         } else {
             if (deferred) {
                 schwasm_create_node(schwasm, op, (uint16_t) value);
-                sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer) {.index = schwasm->nodes.count - 1, .token_line = token_line}));
+                sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer){.index = schwasm->nodes.count - 1, .token_line = token_line}));
             } else {
                 schwasm_op_validate(schwasm, op, value, token_line);
                 schwasm_create_node(schwasm, op, (uint16_t) value);
@@ -241,7 +241,7 @@ static inline void st_ex(struct Schwasm *schwasm, enum GCPU_REG reg) {
 
         if (deferred) {
             schwasm_create_node(schwasm, op, (uint16_t) addr);
-            sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer) {.index = schwasm->nodes.count - 1, .token_line = token_line}));
+            sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer){.index = schwasm->nodes.count - 1, .token_line = token_line}));
         } else {
             schwasm_op_validate(schwasm, op, addr, token_line);
             schwasm_create_node(schwasm, op, (uint16_t) addr);
@@ -282,7 +282,7 @@ static inline void branch_ex(struct Schwasm *schwasm, enum Schwasm_Op op) {
 
         if (deferred) {
             schwasm_create_node(schwasm, op, (uint16_t) addr);
-            sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer) {.index = schwasm->nodes.count - 1, .token_line = token_line }));
+            sp_da_push(&query->value.deferred, ((struct Schwasm_Label_Defer){.index = schwasm->nodes.count - 1, .token_line = token_line}));
         } else {
             schwasm_op_validate(schwasm, op, addr, token_line);
             schwasm_create_node(schwasm, op, (uint16_t) addr);

@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
     }
 
     schwasm_generate_ir(&schwasm);
-    Schwasm_Nodes *nodes = &(Schwasm_Nodes) {0};
+    Schwasm_Nodes *nodes = &(Schwasm_Nodes){0};
 
     if (schwasm.addr_unsorted) {
         sp_da_reserve(nodes, schwasm.nodes.count);
